@@ -21,7 +21,14 @@ import { Tabs } from '../../components/ui/Tabs/Tabs';
 import type { RoleDefinition } from '../../config/roles';
 import { AddUserModal } from './AddUserModal';
 import { UserDrawer } from './UserDrawer';
-import { KYC_TONE, RISK_TONE, STATUS_TONE, getPeopleView } from './usersData';
+import {
+  KYC_TONE,
+  RISK_TONE,
+  STATUS_TONE,
+  getPeopleView,
+  showsAgentColumn,
+  showsLastLogin,
+} from './usersData';
 import type { Person } from './usersData';
 import styles from './PeopleListPage.module.css';
 
@@ -36,6 +43,10 @@ const PAGE_SIZE = 5;
  */
 export function PeopleListPage({ role, segment, title }: { role: RoleDefinition; segment: string; title: string }) {
   const { people, stats, noun } = useMemo(() => getPeopleView(role, segment), [role, segment]);
+  /** Franchise and Super Agent also see who owns each user; every downline panel sees recency. */
+  const isUsers = segment === 'users';
+  const withAgent = isUsers && showsAgentColumn(role);
+  const withLastLogin = isUsers && showsLastLogin(role);
 
   const [filter, setFilter] = useState<Filter>('All');
   const [query, setQuery] = useState('');
@@ -104,8 +115,28 @@ export function PeopleListPage({ role, segment, title }: { role: RoleDefinition;
       ),
     },
     { key: 'phone', header: 'Phone', render: (person) => <span className={styles.phone}>{person.phone}</span> },
+    ...(withAgent
+      ? [
+          {
+            key: 'agent',
+            header: 'Agent',
+            render: (person: Person) => <span className={styles.agent}>{person.agent ?? '—'}</span>,
+          },
+        ]
+      : []),
     { key: 'balance', header: 'Balance', render: (person) => <span className={styles.balance}>{person.balance}</span> },
     { key: 'bets', header: 'Total Bets', render: (person) => person.totalBets },
+    ...(withLastLogin
+      ? [
+          {
+            key: 'lastLogin',
+            header: 'Last Login',
+            render: (person: Person) => (
+              <span className={styles.lastLogin}>{person.lastLogin ?? '—'}</span>
+            ),
+          },
+        ]
+      : []),
     { key: 'kyc', header: 'KYC', render: (person) => <Badge tone={KYC_TONE[person.kyc]}>{person.kyc}</Badge> },
     {
       key: 'status',
@@ -212,7 +243,9 @@ export function PeopleListPage({ role, segment, title }: { role: RoleDefinition;
         />
       ) : null}
 
-      {openPerson ? <UserDrawer person={openPerson} onClose={() => setOpenPerson(null)} /> : null}
+      {openPerson ? (
+        <UserDrawer person={openPerson} showAgent={withAgent} onClose={() => setOpenPerson(null)} />
+      ) : null}
     </div>
   );
 }

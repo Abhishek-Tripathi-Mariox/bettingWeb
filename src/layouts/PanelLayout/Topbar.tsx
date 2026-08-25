@@ -1,4 +1,4 @@
-import { BellIcon, ChevronDownIcon, ChevronRightIcon, CollapseIcon, PlusIcon } from '../../components/icons';
+import { BellIcon, ChevronDownIcon, ChevronRightIcon, CollapseIcon } from '../../components/icons';
 import { Dot } from '../../components/ui/Dot/Dot';
 import { SearchInput } from '../../components/ui/SearchInput/SearchInput';
 import { PLATFORM_STATUS } from '../../config/app';
@@ -55,14 +55,6 @@ export function Topbar({ role, section, username, onToggleNav }: TopbarProps) {
       <button type="button" className={styles.iconButton} aria-label="Notifications">
         <BellIcon size={15.999} />
         <span className={styles.badgeDot} />
-      </button>
-
-      <button
-        type="button"
-        className={`${styles.iconButton} ${styles.iconButtonBrand}`}
-        aria-label="Create"
-      >
-        <PlusIcon size={15.999} />
       </button>
 
       <span className={styles.avatar} title={`${role.operator} (${username})`}>

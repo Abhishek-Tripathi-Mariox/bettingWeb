@@ -4,8 +4,25 @@ import type { NavItem } from '../../config/roles';
 import { useAuth } from '../auth/authContext';
 import { DashboardView } from '../dashboard/DashboardView';
 import { AgentPage } from '../agents/AgentPage';
+import { AnalyticsPage } from '../analytics/AnalyticsPage';
+import { BettingPage } from '../betting/BettingPage';
+import { CmsPage } from '../cms/CmsPage';
+import { CommissionPage } from '../commission/CommissionPage';
+import { EventsPage } from '../events/EventsPage';
 import { FranchisePage } from '../franchises/FranchisePage';
+import { MarketsPage } from '../markets/MarketsPage';
+import { NotificationsPage } from '../notifications/NotificationsPage';
+import { PartnershipPage } from '../partnership/PartnershipPage';
+import { PermissionsPage } from '../permissions/PermissionsPage';
+import { ProfilePage } from '../profile/ProfilePage';
+import { ReportsPage } from '../reports/ReportsPage';
+import { SecurityPage } from '../security/SecurityPage';
+import { SettingsPage } from '../settings/SettingsPage';
+import { ContactSupportPage } from '../support/ContactSupportPage';
+import { SupportTicketsPage } from '../support/SupportTicketsPage';
+import { RiskPage } from '../risk/RiskPage';
 import { SuperAgentPage } from '../superAgents/SuperAgentPage';
+import { TransactionsPage } from '../transactions/TransactionsPage';
 import { WalletPage } from '../wallet/WalletPage';
 import { PeopleListPage } from '../users/PeopleListPage';
 import styles from './PanelSection.module.css';
@@ -31,6 +48,40 @@ export function PanelSection({ item }: { item: NavItem }) {
   if (item.segment === 'agent') return <AgentPage role={role} />;
 
   if (item.segment === 'wallet') return <WalletPage />;
+
+  if (item.segment === 'transactions') return <TransactionsPage />;
+
+  if (item.segment === 'betting') return <BettingPage />;
+
+  if (item.segment === 'events') return <EventsPage />;
+
+  if (item.segment === 'markets') return <MarketsPage />;
+
+  if (item.segment === 'risk') return <RiskPage />;
+
+  if (item.segment === 'commission') return <CommissionPage />;
+
+  if (item.segment === 'partnership') return <PartnershipPage />;
+
+  if (item.segment === 'reports') return <ReportsPage />;
+
+  if (item.segment === 'analytics') return <AnalyticsPage />;
+
+  if (item.segment === 'cms') return <CmsPage />;
+
+  if (item.segment === 'notifications') return <NotificationsPage />;
+
+  if (item.segment === 'security') return <SecurityPage />;
+
+  if (item.segment === 'settings') return <SettingsPage />;
+
+  if (item.segment === 'profile') return <ProfilePage role={role} />;
+
+  if (item.segment === 'support-tickets') return <SupportTicketsPage />;
+
+  if (item.segment === 'support') return <ContactSupportPage />;
+
+  if (item.segment === 'permissions') return <PermissionsPage />;
 
   if (PEOPLE_SEGMENTS.has(item.segment)) {
     return <PeopleListPage role={role} segment={item.segment} title={item.label} />;

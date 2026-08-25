@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { cx } from '../../../lib/cx';
 import styles from './Tabs.module.css';
 
@@ -8,6 +9,8 @@ export type TabsProps<T extends string> = {
   value: T;
   onChange: (value: T) => void;
   variant?: TabsVariant;
+  /** Colour of the active tab; defaults to the brand blue. */
+  accent?: string;
   className?: string;
   'aria-label'?: string;
 };
@@ -18,11 +21,17 @@ export function Tabs<T extends string>({
   value,
   onChange,
   variant = 'pill',
+  accent,
   className,
   'aria-label': ariaLabel,
 }: TabsProps<T>) {
   return (
-    <div className={cx(styles.tabs, styles[variant], className)} role="tablist" aria-label={ariaLabel}>
+    <div
+      className={cx(styles.tabs, styles[variant], className)}
+      style={accent ? ({ '--tabs-accent': accent } as CSSProperties) : undefined}
+      role="tablist"
+      aria-label={ariaLabel}
+    >
       {items.map((item) => (
         <button
           key={item}

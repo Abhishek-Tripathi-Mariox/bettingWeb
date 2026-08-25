@@ -5,14 +5,16 @@ import styles from './TextField.module.css';
 
 export type TextAreaFieldProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'id'> & {
   label: string;
+  /** Class for the field wrapper — use this for grid placement. */
+  fieldClassName?: string;
 };
 
 /** Same field chrome as TextField, for multi-line notes. */
-export function TextAreaField({ label, className, ...rest }: TextAreaFieldProps) {
+export function TextAreaField({ label, className, fieldClassName, ...rest }: TextAreaFieldProps) {
   const id = useId();
 
   return (
-    <div className={cx(styles.field, styles.caps)}>
+    <div className={cx(styles.field, styles.caps, fieldClassName)}>
       <label className={styles.label} htmlFor={id}>
         {label}
       </label>

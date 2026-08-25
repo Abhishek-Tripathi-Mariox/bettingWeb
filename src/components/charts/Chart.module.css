@@ -56,6 +56,27 @@
   gap: var(--space-8);
 }
 
+/* Commission distribution — ring centred with the legend beneath it. */
+.donutStack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-6);
+}
+
+.donutStack > svg {
+  align-self: center;
+}
+
+.donutStack .donutLegend {
+  flex: none;
+  gap: var(--space-3);
+}
+
+.donutStack .donutLegendItem {
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-xs);
+}
+
 .donutLegend {
   display: flex;
   flex: 1;

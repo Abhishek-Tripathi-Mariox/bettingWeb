@@ -42,3 +42,23 @@
   font-size: var(--font-size-md);
   line-height: var(--line-height-md);
 }
+
+/* Wallet totals on the profile sheet — node 139:88659 draws a wider tile with
+   a 12px label and an 18px figure. */
+.lg {
+  border: var(--border-hairline);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  padding: var(--space-7);
+}
+
+.lg .label {
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-xs);
+}
+
+.lg .value {
+  padding-top: var(--space-2);
+  font-size: var(--font-size-xl);
+  line-height: var(--line-height-xl);
+}

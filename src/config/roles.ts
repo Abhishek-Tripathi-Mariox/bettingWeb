@@ -1,4 +1,6 @@
 import type { ComponentType } from 'react';
+import type { BadgeTone } from '../components/ui/Badge/Badge';
+import type { DotTone } from '../components/ui/Dot/Dot';
 import type { IconProps } from '../components/icons';
 import {
   AnalyticsIcon,
@@ -26,6 +28,9 @@ import {
 
 export type RoleId = 'super-admin' | 'franchise' | 'super-agent' | 'agent';
 
+/** Tones a role can be signed with — the ones both Badge and Dot understand. */
+export type RoleAccent = Extract<BadgeTone, DotTone>;
+
 export type NavItem = {
   /** Path segment appended to the role's base path; '' is the role home. */
   segment: string;
@@ -48,6 +53,12 @@ export type RoleDefinition = {
   operator: string;
   /** The role directly beneath this one in the hierarchy. */
   manages: RoleId | null;
+  /**
+   * Colour this panel is signed with — the sidebar identity chip and the
+   * profile badge. Each role gets its own so the panel is recognisable at a
+   * glance; Badge's tones already carry the exact hues the design uses.
+   */
+  accent: RoleAccent;
   /** Nav entry that lists this role's downline (franchises, agents, players…). */
   downline: NavItem;
   nav: NavItem[];
@@ -79,6 +90,8 @@ const NAV = {
   settings: { segment: 'settings', label: 'Settings', icon: SettingsIcon },
   profile: { segment: 'profile', label: 'Profile', icon: UserIcon },
   support: { segment: 'support-tickets', label: 'Support Tickets', icon: SupportIcon },
+  /** Contact channels rather than a ticket queue — node 139:90076. */
+  contactSupport: { segment: 'support', label: 'Support', icon: SupportIcon },
   permissions: { segment: 'permissions', label: 'Permissions', icon: ShieldCheckIcon },
 } satisfies Record<string, NavItem>;
 
@@ -89,6 +102,7 @@ const NAV = {
 export const ROLES: RoleDefinition[] = [
   {
     id: 'super-admin',
+    accent: 'brand',
     label: 'Super Admin',
     icon: ShieldCheckIcon,
     description: 'Full platform control across every franchise, market and settlement.',
@@ -124,6 +138,7 @@ export const ROLES: RoleDefinition[] = [
   },
   {
     id: 'franchise',
+    accent: 'success',
     label: 'Franchise',
     icon: BuildingIcon,
     description: 'Runs a region: onboards super agents and owns their exposure limits.',
@@ -137,22 +152,16 @@ export const ROLES: RoleDefinition[] = [
       NAV.users,
       NAV.superAgents,
       NAV.agents,
-      NAV.wallet,
-      NAV.transactions,
-      NAV.betting,
-      NAV.events,
-      NAV.markets,
-      NAV.risk,
       NAV.commission,
       NAV.reports,
-      NAV.analytics,
-      NAV.notifications,
       NAV.settings,
       NAV.profile,
+      NAV.contactSupport,
     ],
   },
   {
     id: 'super-agent',
+    accent: 'warning',
     label: 'Super Agent',
     icon: UsersCogIcon,
     description: 'Manages a book of agents and their daily credit allocation.',
@@ -167,18 +176,16 @@ export const ROLES: RoleDefinition[] = [
       NAV.agents,
       NAV.wallet,
       NAV.transactions,
-      NAV.betting,
-      NAV.events,
-      NAV.markets,
       NAV.commission,
       NAV.reports,
-      NAV.notifications,
       NAV.settings,
       NAV.profile,
+      NAV.contactSupport,
     ],
   },
   {
     id: 'agent',
+    accent: 'info',
     label: 'Agent',
     icon: UserIcon,
     description: 'Front line: creates players, tops up chips and settles positions.',
@@ -192,13 +199,11 @@ export const ROLES: RoleDefinition[] = [
       NAV.users,
       NAV.wallet,
       NAV.transactions,
-      NAV.betting,
-      NAV.events,
-      NAV.markets,
+      NAV.commission,
       NAV.reports,
-      NAV.notifications,
       NAV.settings,
       NAV.profile,
+      NAV.contactSupport,
     ],
   },
 ];

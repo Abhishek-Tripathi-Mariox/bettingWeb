@@ -1,3 +1,4 @@
+import { cx } from '../../lib/cx';
 import styles from './Chart.module.css';
 
 export type DonutSlice = { label: string; value: number; color: string };
@@ -9,10 +10,18 @@ export type DonutChartProps = {
   thickness?: number;
   /** Gap between slices, in degrees. */
   gap?: number;
+  /** 'row' sits the legend beside the ring; 'stack' puts it underneath. */
+  layout?: 'row' | 'stack';
 };
 
 /** Exposure-distribution ring with its legend. */
-export function DonutChart({ data, size = 159.994, thickness = 0.42, gap = 2 }: DonutChartProps) {
+export function DonutChart({
+  data,
+  size = 159.994,
+  thickness = 0.42,
+  gap = 2,
+  layout = 'row',
+}: DonutChartProps) {
   const total = data.reduce((sum, slice) => sum + slice.value, 0) || 1;
   const outer = size / 2 - size * 0.05;
   const stroke = outer * thickness;
@@ -23,7 +32,7 @@ export function DonutChart({ data, size = 159.994, thickness = 0.42, gap = 2 }: 
   let offset = 0;
 
   return (
-    <div className={styles.donutRow}>
+    <div className={cx(styles.donutRow, layout === 'stack' && styles.donutStack)}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Distribution">
         <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
           {data.map((slice) => {

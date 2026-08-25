@@ -5,6 +5,13 @@
  * component ever hard-codes a raw hex value.
  */
 :root {
+  /*
+   * The panels are dark-only. Telling the browser so makes it render native
+   * UI to match — select popups, date pickers, scrollbars and autofill — none
+   * of which a stylesheet can reach.
+   */
+  color-scheme: dark;
+
   /* Surfaces */
   --color-bg: #061321;
   --color-bg-sidebar: #081726;

@@ -14,16 +14,19 @@
 }
 
 .track {
-  margin-top: var(--space-2);
-  height: 4px;
-  border-radius: var(--radius-1, 4px);
-  background-color: var(--color-surface-hover);
+  height: var(--bar-height, 4px);
+  border-radius: var(--bar-height, 4px);
+  background-color: var(--bar-track, var(--color-surface-hover));
   overflow: hidden;
 }
 
+.spaced {
+  margin-top: var(--space-2);
+}
+
 .fill {
-  height: 4px;
-  border-radius: 4px;
-  background-color: var(--bar-color);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--bar-fill, var(--bar-color));
   transition: width var(--transition-base);
 }

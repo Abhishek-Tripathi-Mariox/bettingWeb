@@ -17,6 +17,8 @@ export type DataTableProps<Row> = {
   /** 'lg' = 46px rows, 'md' = 43px, 'sm' = 41px compact rows. */
   size?: 'lg' | 'md' | 'sm';
   emptyMessage?: string;
+  /** Extra class per row — used to tint rows that need attention. */
+  rowClassName?: (row: Row) => string | undefined;
   onRowClick?: (row: Row) => void;
 };
 
@@ -27,6 +29,7 @@ export function DataTable<Row>({
   rowKey,
   size = 'md',
   emptyMessage = 'Nothing to show yet.',
+  rowClassName,
   onRowClick,
 }: DataTableProps<Row>) {
   if (rows.length === 0) {
@@ -54,7 +57,7 @@ export function DataTable<Row>({
           {rows.map((row) => (
             <tr
               key={rowKey(row)}
-              className={cx(styles.row, onRowClick && styles.clickable)}
+              className={cx(styles.row, onRowClick && styles.clickable, rowClassName?.(row))}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
               {columns.map((column) => (

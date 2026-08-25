@@ -76,6 +76,7 @@ export function AgentDrawer({ agent, onClose }: { agent: AgentRow; onClose: () =
           items={TABS}
           value={tab}
           variant="underline"
+          accent="var(--color-success)"
           aria-label="Agent sections"
           onChange={setTab}
         />

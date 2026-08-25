@@ -6,8 +6,8 @@ import styles from './TextField.module.css';
 export type SelectFieldProps = Omit<SelectHTMLAttributes<HTMLSelectElement>, 'id'> & {
   label: string;
   options: readonly string[];
-  /** Shown as the empty first entry. */
-  placeholder?: string;
+  /** Shown as the empty first entry; null drops it for always-set fields. */
+  placeholder?: string | null;
   labelCase?: 'sentence' | 'caps';
 };
 
@@ -29,7 +29,7 @@ export function SelectField({
       </label>
       <div className={styles.control}>
         <select id={id} className={cx(styles.input, className)} {...rest}>
-          <option value="">{placeholder}</option>
+          {placeholder === null ? null : <option value="">{placeholder}</option>}
           {options.map((option) => (
             <option key={option} value={option}>
               {option}

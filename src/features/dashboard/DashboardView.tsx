@@ -1,5 +1,6 @@
 import { StatCard } from '../../components/ui/StatCard/StatCard';
 import type { RoleDefinition } from '../../config/roles';
+import { AgentDashboard } from './AgentDashboard';
 import { getDashboard } from './dashboardData';
 import {
   CommissionPanel,
@@ -12,10 +13,17 @@ import { LiveMatchesPanel, RiskAlertsPanel, SystemHealthPanel } from './widgets/
 import styles from './DashboardView.module.css';
 
 /**
- * The dashboard from node 79:1537. The same composition serves every role —
- * only the figures behind it change (see `getDashboard`).
+ * The dashboard from node 79:1537. One composition serves the three panels
+ * that oversee a network — only the figures change (see `getDashboard`). The
+ * agent runs a single book and gets its own screen entirely (node 139:114739).
  */
 export function DashboardView({ role }: { role: RoleDefinition }) {
+  if (role.id === 'agent') return <AgentDashboard />;
+
+  return <NetworkDashboard role={role} />;
+}
+
+function NetworkDashboard({ role }: { role: RoleDefinition }) {
   const data = getDashboard(role.id);
 
   return (

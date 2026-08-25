@@ -7,8 +7,11 @@ export type MetricTileProps = {
   value: string;
   /** Any CSS colour for the figure; defaults to white. */
   color?: string;
-  /** 'md' = bordered drawer tile, 'sm' = inline tile inside a record card. */
-  size?: 'md' | 'sm';
+  /**
+   * 'md' = bordered drawer tile, 'sm' = inline tile inside a record card,
+   * 'lg' = the larger bordered tile the profile wallet totals are drawn with.
+   */
+  size?: 'md' | 'sm' | 'lg';
   className?: string;
 };
 

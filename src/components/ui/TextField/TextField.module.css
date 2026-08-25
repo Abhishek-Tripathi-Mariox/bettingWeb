@@ -62,6 +62,16 @@
   padding-left: 36px;
 }
 
+/*
+ * The select popup is drawn by the browser on its own canvas, so it never
+ * inherits the control's translucent surface — options need an opaque colour
+ * of their own or they render white-on-white.
+ */
+.input option {
+  background-color: var(--color-bg-header);
+  color: var(--color-text);
+}
+
 .input::placeholder {
   color: var(--color-text-muted);
   opacity: 0.7;

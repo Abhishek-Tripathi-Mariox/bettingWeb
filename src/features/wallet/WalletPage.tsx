@@ -15,8 +15,8 @@ import { Badge } from '../../components/ui/Badge/Badge';
 import { Button } from '../../components/ui/Button/Button';
 import { DataTable } from '../../components/ui/DataTable/DataTable';
 import type { Column } from '../../components/ui/DataTable/DataTable';
+import { PillTabs } from '../../components/ui/PillTabs/PillTabs';
 import { StatCard } from '../../components/ui/StatCard/StatCard';
-import { cx } from '../../lib/cx';
 import { NewPaymentModal } from './NewPaymentModal';
 import { PaymentsTab } from './PaymentsTab';
 import { WalletActionModal } from './WalletActionModal';
@@ -172,31 +172,7 @@ export function WalletPage() {
 
       <section className={styles.card}>
         <div className={styles.toolbar}>
-          <div className={styles.tabs}>
-            {TABS.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className={cx(styles.tab, tab === item.label && styles.tabActive)}
-                onClick={() => setTab(item.label)}
-              >
-                {item.label}
-                {'badge' in item && item.badge ? (
-                  <span
-                    className={styles.tabBadge}
-                    style={
-                      {
-                        '--badge-bg': `rgba(${item.rgb}, 0.2)`,
-                        '--badge-color': `rgb(${item.rgb})`,
-                      } as CSSProperties
-                    }
-                  >
-                    {item.badge}
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </div>
+          <PillTabs items={TABS} value={tab} label="Wallet sections" onChange={setTab} />
           <div className={styles.toolbarActions}>
             <Button variant="quiet" size="xs" icon={<ExportIcon size={12} />}>
               Export

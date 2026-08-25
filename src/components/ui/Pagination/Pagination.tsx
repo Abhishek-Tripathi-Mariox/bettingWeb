@@ -6,15 +6,19 @@ export type PaginationProps = {
   pageCount: number;
   /** Left-hand summary, e.g. "Showing 5 of 8 users". */
   summary: string;
+  /** How many pages sit next to the first/last one before the ellipsis. */
+  run?: number;
   onChange: (page: number) => void;
 };
 
 /** 1 2 3 … 29 — long ranges collapse around the current page, as in Figma. */
-function pageList(page: number, pageCount: number): (number | 'gap')[] {
-  if (pageCount <= 5) return Array.from({ length: pageCount }, (_, index) => index + 1);
+function pageList(page: number, pageCount: number, run: number): (number | 'gap')[] {
+  if (pageCount <= run + 2) return Array.from({ length: pageCount }, (_, index) => index + 1);
 
-  const window = [page - 1, page, page + 1].filter((value) => value > 1 && value < pageCount);
-  const middle = page <= 3 ? [2, 3] : page >= pageCount - 2 ? [pageCount - 2, pageCount - 1] : window;
+  const head = Array.from({ length: run - 1 }, (_, index) => index + 2);
+  const tail = Array.from({ length: run - 1 }, (_, index) => pageCount - run + index + 1);
+  const around = [page - 1, page, page + 1].filter((value) => value > 1 && value < pageCount);
+  const middle = page <= run ? head : page > pageCount - run ? tail : around;
 
   const pages: (number | 'gap')[] = [1];
   if (middle[0] > 2) pages.push('gap');
@@ -24,8 +28,8 @@ function pageList(page: number, pageCount: number): (number | 'gap')[] {
   return pages;
 }
 
-export function Pagination({ page, pageCount, summary, onChange }: PaginationProps) {
-  const pages = pageList(page, pageCount);
+export function Pagination({ page, pageCount, summary, run = 3, onChange }: PaginationProps) {
+  const pages = pageList(page, pageCount, run);
 
   return (
     <div className={styles.bar}>

@@ -59,18 +59,36 @@
   padding: 12px 18px 12.755px;
 }
 
+/* Each panel signs its chip in the role's own colour — node 139:110879 draws
+   the Super Agent in yellow where the Franchise is green. */
 .identityChip {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  border: var(--hairline) solid rgba(33, 150, 243, 0.19);
+  border: var(--hairline) solid rgba(var(--role-rgb), 0.19);
   border-radius: var(--radius-md);
-  background-color: var(--color-primary-tint);
+  background-color: rgba(var(--role-rgb), 0.15);
   padding: 8.755px 12.755px;
 }
 
+.identityChip.brand {
+  --role-rgb: 33, 150, 243;
+}
+
+.identityChip.info {
+  --role-rgb: 41, 182, 246;
+}
+
+.identityChip.success {
+  --role-rgb: 34, 197, 94;
+}
+
+.identityChip.warning {
+  --role-rgb: 250, 204, 21;
+}
+
 .identityRole {
-  color: var(--color-primary);
+  color: rgb(var(--role-rgb));
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
   line-height: var(--line-height-xs);

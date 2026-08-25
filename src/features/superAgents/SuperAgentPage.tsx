@@ -24,6 +24,7 @@ import { CreateSuperAgentModal } from './CreateSuperAgentModal';
 import {
   SUPER_AGENT_CAPABILITIES,
   getSuperAgentView,
+  ownsWholeDirectory,
   toSuperAgentRecord,
 } from './superAgentsData';
 import type { SuperAgentRow } from './superAgentsData';
@@ -32,6 +33,8 @@ import styles from './SuperAgentPage.module.css';
 /** Super agent directory from node 112:698. */
 export function SuperAgentPage({ role }: { role: RoleDefinition }) {
   const { rows, stats, highlights } = useMemo(() => getSuperAgentView(role), [role]);
+  /** A franchise is looking at its own book, so the owning column is noise. */
+  const showsFranchise = ownsWholeDirectory(role);
 
   const [query, setQuery] = useState('');
   const [created, setCreated] = useState<SuperAgentRow[]>([]);
@@ -52,11 +55,15 @@ export function SuperAgentPage({ role }: { role: RoleDefinition }) {
   const columns: Column<SuperAgentRow>[] = [
     { key: 'id', header: 'ID', render: (row) => <span className={styles.id}>{row.code}</span> },
     { key: 'name', header: 'Name', render: (row) => <span className={styles.name}>{row.name}</span> },
-    {
-      key: 'franchise',
-      header: 'Franchise',
-      render: (row) => <span className={styles.muted}>{row.franchise}</span>,
-    },
+    ...(showsFranchise
+      ? [
+          {
+            key: 'franchise',
+            header: 'Franchise',
+            render: (row: SuperAgentRow) => <span className={styles.muted}>{row.franchise}</span>,
+          },
+        ]
+      : []),
     { key: 'agents', header: 'Agents', render: (row) => <span className={styles.strong}>{row.agents}</span> },
     { key: 'users', header: 'Users', render: (row) => <span className={styles.strong}>{row.users}</span> },
     {

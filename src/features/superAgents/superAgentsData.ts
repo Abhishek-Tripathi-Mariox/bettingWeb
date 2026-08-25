@@ -166,15 +166,52 @@ export function toSuperAgentRecord(row: SuperAgentRow): SuperAgent {
   };
 }
 
-export function getSuperAgentView(role: RoleDefinition) {
-  const rows = SUPER_AGENTS.slice(0, VISIBLE[role.id]);
+/** The franchise the demo Franchise operator runs — node 119:73716 shows its two. */
+const HOME_FRANCHISE = 'Mumbai Franchise';
 
-  const stats: StatCardProps[] = [
-    { label: 'Total Super Agents', value: '84', caption: 'Across all franchises', icon: UsersCogIcon, accent: 'blue' },
-    { label: 'Active', value: '78', caption: 'Operational', delta: '+3 this month vs yesterday', tone: 'up', icon: CheckCircleIcon, accent: 'green' },
-    { label: 'Total Turnover', value: '₹21.0Cr', caption: 'This month', delta: '+16.2% vs yesterday', tone: 'up', icon: DollarIcon, accent: 'yellow' },
-    { label: 'Commission Paid', value: '₹2.10Cr', caption: 'This month', icon: PercentIcon, accent: 'cyan' },
-  ];
+/** Only Super Admin looks across franchises; everyone else owns one. */
+export function ownsWholeDirectory(role: RoleDefinition): boolean {
+  return role.manages === 'franchise';
+}
+
+/** "₹4.2Cr" / "₹42.0L" -> rupees, so a franchise's own totals can be summed. */
+function parseAmount(value: string): number {
+  const match = value.match(/([\d.]+)\s*(Cr|L)?/i);
+  if (!match) return 0;
+  const amount = Number(match[1]);
+  if (match[2]?.toLowerCase() === 'cr') return amount * 10_000_000;
+  if (match[2]?.toLowerCase() === 'l') return amount * 100_000;
+  return amount;
+}
+
+/** Mirrors the seed's own style: one decimal, Cr above a crore else L. */
+function formatAmount(rupees: number): string {
+  return rupees >= 10_000_000
+    ? `₹${(rupees / 10_000_000).toFixed(1)}Cr`
+    : `₹${(rupees / 100_000).toFixed(1)}L`;
+}
+
+export function getSuperAgentView(role: RoleDefinition) {
+  const wholeDirectory = ownsWholeDirectory(role);
+  const scope = wholeDirectory
+    ? SUPER_AGENTS
+    : SUPER_AGENTS.filter((row) => row.franchise === HOME_FRANCHISE);
+  const rows = scope.slice(0, VISIBLE[role.id]);
+
+  // Super Admin reports platform totals; a franchise reports its own book.
+  const stats: StatCardProps[] = wholeDirectory
+    ? [
+        { label: 'Total Super Agents', value: '84', caption: 'Across all franchises', icon: UsersCogIcon, accent: 'blue' },
+        { label: 'Active', value: '78', caption: 'Operational', delta: '+3 this month vs yesterday', tone: 'up', icon: CheckCircleIcon, accent: 'green' },
+        { label: 'Total Turnover', value: '₹21.0Cr', caption: 'This month', delta: '+16.2% vs yesterday', tone: 'up', icon: DollarIcon, accent: 'yellow' },
+        { label: 'Commission Paid', value: '₹2.10Cr', caption: 'This month', icon: PercentIcon, accent: 'cyan' },
+      ]
+    : [
+        { label: 'My Super Agents', value: String(rows.length), caption: 'Under your franchise', icon: UsersCogIcon, accent: 'blue' },
+        { label: 'Active', value: String(rows.filter((row) => row.status === 'Active').length), caption: 'Operational', delta: '+3 this month vs yesterday', tone: 'up', icon: CheckCircleIcon, accent: 'green' },
+        { label: 'Total Turnover', value: formatAmount(rows.reduce((sum, row) => sum + parseAmount(row.turnover), 0)), caption: 'This month', delta: '+16.2% vs yesterday', tone: 'up', icon: DollarIcon, accent: 'yellow' },
+        { label: 'Commission Paid', value: formatAmount(rows.reduce((sum, row) => sum + parseAmount(row.commission), 0)), caption: 'This month', icon: PercentIcon, accent: 'cyan' },
+      ];
 
   return { rows, stats, highlights: rows.slice(0, 3) };
 }

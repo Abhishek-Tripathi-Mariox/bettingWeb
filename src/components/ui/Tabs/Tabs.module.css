@@ -80,9 +80,10 @@
   color: var(--color-text);
 }
 
+/* The agent sheet underlines in green; every other drawer keeps the brand blue. */
 .underline .active,
 .underline .active:hover {
-  border-bottom-color: var(--color-primary);
-  color: var(--color-primary);
+  border-bottom-color: var(--tabs-accent, var(--color-primary));
+  color: var(--tabs-accent, var(--color-primary));
   font-weight: var(--font-weight-semibold);
 }

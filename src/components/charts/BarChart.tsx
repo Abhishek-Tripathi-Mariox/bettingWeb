@@ -8,6 +8,8 @@ export type BarChartProps = {
   data: BarGroup[];
   series: BarSeries[];
   height?: number;
+  /** Axis label formatter; defaults to the compact Indian-style figures. */
+  formatValue?: (value: number) => string;
 };
 
 const PAD = { top: 6, right: 6, bottom: 26, left: 52 };
@@ -15,7 +17,7 @@ const WIDTH = 700;
 const BAR_GAP = 4;
 
 /** Grouped columns — deposits vs withdrawals in the wallet-flow panel. */
-export function BarChart({ data, series, height = 180 }: BarChartProps) {
+export function BarChart({ data, series, height = 180, formatValue = formatCompact }: BarChartProps) {
   const max = niceMax(Math.max(...data.flatMap((group) => group.values)));
   const plotWidth = WIDTH - PAD.left - PAD.right;
   const plotHeight = height - PAD.top - PAD.bottom;
@@ -37,7 +39,7 @@ export function BarChart({ data, series, height = 180 }: BarChartProps) {
         <g key={tick}>
           <line className={styles.grid} x1={PAD.left} x2={WIDTH - PAD.right} y1={y(tick)} y2={y(tick)} />
           <text className={`${styles.axis} ${styles.axisY}`} x={PAD.left - 8} y={y(tick) + 4}>
-            {formatCompact(tick)}
+            {formatValue(tick)}
           </text>
         </g>
       ))}

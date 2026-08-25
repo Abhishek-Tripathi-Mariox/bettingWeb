@@ -96,11 +96,6 @@
   background-color: var(--color-surface-hover);
 }
 
-.iconButtonBrand {
-  border-color: transparent;
-  background-image: var(--gradient-brand);
-}
-
 .badgeDot {
   position: absolute;
   top: 5.99px;

@@ -99,3 +99,16 @@
     width: 100%;
   }
 }
+
+/* Franchise view only — who owns the user, and when they last signed in. */
+.agent {
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-xs);
+}
+
+.lastLogin {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-2xs);
+  line-height: var(--line-height-2xs);
+}

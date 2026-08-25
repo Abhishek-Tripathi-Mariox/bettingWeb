@@ -60,6 +60,9 @@ export type Person = {
   risk: RiskLevel;
   joined: string;
   bets: BetHistoryEntry[];
+  /** Owning agent — surfaced by the Franchise view (node 119:67293). */
+  agent?: string;
+  lastLogin?: string;
 };
 
 const BET_HISTORY: BetHistoryEntry[] = [
@@ -72,14 +75,14 @@ const BET_HISTORY: BetHistoryEntry[] = [
 
 /** The eight platform users behind the Figma list (five are on page one). */
 const USERS: Person[] = [
-  { id: 'U001', name: 'Arjun Sharma', email: 'arjun@mail.com', phone: '+91 98765 43210', balance: '₹2,45,800', totalBets: 248, kyc: 'Verified', status: 'Active', risk: 'low', joined: '12 Mar 2024', bets: BET_HISTORY },
-  { id: 'U002', name: 'Priya Patel', email: 'priya@mail.com', phone: '+91 87654 32109', balance: '₹89,200', totalBets: 124, kyc: 'Verified', status: 'Active', risk: 'low', joined: '02 Apr 2024', bets: BET_HISTORY.slice(0, 3) },
-  { id: 'U003', name: 'Rahul Verma', email: 'rahul@mail.com', phone: '+91 76543 21098', balance: '₹12,400', totalBets: 62, kyc: 'Pending', status: 'Suspended', risk: 'high', joined: '19 Apr 2024', bets: BET_HISTORY.slice(1, 4) },
-  { id: 'U004', name: 'Sneha Gupta', email: 'sneha@mail.com', phone: '+91 65432 10987', balance: '₹5,81,200', totalBets: 412, kyc: 'Verified', status: 'Active', risk: 'medium', joined: '27 Apr 2024', bets: BET_HISTORY },
-  { id: 'U005', name: 'Amit Kumar', email: 'amit@mail.com', phone: '+91 54321 09876', balance: '₹34,800', totalBets: 89, kyc: 'Rejected', status: 'Active', risk: 'medium', joined: '05 May 2024', bets: BET_HISTORY.slice(0, 2) },
-  { id: 'U006', name: 'Kavitha Nair', email: 'kavitha@mail.com', phone: '+91 43210 98765', balance: '₹1,12,600', totalBets: 176, kyc: 'Verified', status: 'Active', risk: 'low', joined: '11 May 2024', bets: BET_HISTORY.slice(2) },
-  { id: 'U007', name: 'Vikram Singh', email: 'vikram@mail.com', phone: '+91 32109 87654', balance: '₹7,900', totalBets: 51, kyc: 'Pending', status: 'Inactive', risk: 'high', joined: '23 May 2024', bets: BET_HISTORY.slice(0, 1) },
-  { id: 'U008', name: 'Rohan Mehta', email: 'rohan@mail.com', phone: '+91 21098 76543', balance: '₹0', totalBets: 0, kyc: 'Pending', status: 'Active', risk: 'low', joined: 'Today', bets: [] },
+  { id: 'U001', name: 'Arjun Sharma', email: 'arjun@mail.com', phone: '+91 98765 43210', balance: '₹2,45,800', totalBets: 248, kyc: 'Verified', status: 'Active', risk: 'low', joined: '12 Mar 2024', agent: 'Deepak Kumar', lastLogin: '2h ago', bets: BET_HISTORY },
+  { id: 'U002', name: 'Priya Patel', email: 'priya@mail.com', phone: '+91 87654 32109', balance: '₹89,200', totalBets: 124, kyc: 'Verified', status: 'Active', risk: 'low', joined: '02 Apr 2024', agent: 'Deepak Kumar', lastLogin: '5h ago', bets: BET_HISTORY.slice(0, 3) },
+  { id: 'U003', name: 'Rahul Verma', email: 'rahul@mail.com', phone: '+91 76543 21098', balance: '₹12,400', totalBets: 62, kyc: 'Pending', status: 'Suspended', risk: 'high', joined: '19 Apr 2024', agent: 'Pooja Sharma', lastLogin: '3d ago', bets: BET_HISTORY.slice(1, 4) },
+  { id: 'U004', name: 'Sneha Gupta', email: 'sneha@mail.com', phone: '+91 65432 10987', balance: '₹5,81,200', totalBets: 412, kyc: 'Verified', status: 'Active', risk: 'medium', joined: '27 Apr 2024', agent: 'Pooja Sharma', lastLogin: '1h ago', bets: BET_HISTORY },
+  { id: 'U005', name: 'Amit Kumar', email: 'amit@mail.com', phone: '+91 54321 09876', balance: '₹34,800', totalBets: 89, kyc: 'Rejected', status: 'Active', risk: 'medium', joined: '05 May 2024', agent: 'Karan Mehta', lastLogin: '20m ago', bets: BET_HISTORY.slice(0, 2) },
+  { id: 'U006', name: 'Kavitha Nair', email: 'kavitha@mail.com', phone: '+91 43210 98765', balance: '₹1,12,600', totalBets: 176, kyc: 'Verified', status: 'Active', risk: 'low', joined: '11 May 2024', agent: 'Karan Mehta', lastLogin: '6h ago', bets: BET_HISTORY.slice(2) },
+  { id: 'U007', name: 'Vikram Singh', email: 'vikram@mail.com', phone: '+91 32109 87654', balance: '₹7,900', totalBets: 51, kyc: 'Pending', status: 'Inactive', risk: 'high', joined: '23 May 2024', agent: 'Pooja Sharma', lastLogin: '9d ago', bets: BET_HISTORY.slice(0, 1) },
+  { id: 'U008', name: 'Rohan Mehta', email: 'rohan@mail.com', phone: '+91 21098 76543', balance: '₹0', totalBets: 0, kyc: 'Pending', status: 'Active', risk: 'low', joined: 'Today', agent: 'Deepak Kumar', lastLogin: 'Just now', bets: [] },
 ];
 
 /** Downline listings reuse the same record shape with role-appropriate names. */
@@ -108,6 +111,26 @@ function buildDownline(segment: string): Person[] {
     joined: `0${index + 1} Feb 2024`,
     bets: BET_HISTORY.slice(0, (index % 4) + 1),
   }));
+}
+
+/**
+ * The Agent and Last Login columns appear for roles whose users sit under an
+ * agent further down the tree — Franchise (node 119:67293) and Super Agent.
+ * Super Admin's own list (node 79:3065) omits both, and an Agent's users are
+ * its own, so neither adds anything there.
+ */
+/** Only panels that sit above the agents need to say which agent owns a user. */
+export function showsAgentColumn(role: RoleDefinition): boolean {
+  return role.manages === 'super-agent' || role.manages === 'agent';
+}
+
+/**
+ * The platform-wide list is too broad for per-user recency; every downline
+ * panel runs a small enough book to track it (nodes 119:67293, 139:93495,
+ * 147:115519 all show the column, 79:3065 does not).
+ */
+export function showsLastLogin(role: RoleDefinition): boolean {
+  return role.id !== 'super-admin';
 }
 
 const SHARE: Record<RoleId, number> = {

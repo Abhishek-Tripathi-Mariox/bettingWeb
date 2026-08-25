@@ -11,6 +11,7 @@ import {
   MonitorIcon,
   PencilIcon,
   PhoneIcon,
+  UserIcon,
   PulseIcon,
   SmartphoneIcon,
   UserCheckIcon,
@@ -40,11 +41,13 @@ export type UserDrawerProps = {
   person: Person;
   /** Section to open on, e.g. straight to the bet history. */
   defaultTab?: Tab;
+  /** Franchise and Super Agent also see the owning agent (node 119:68771). */
+  showAgent?: boolean;
   onClose: () => void;
 };
 
 /** User record sheet from nodes 79:6144 (overview) and 79:12933 (bets). */
-export function UserDrawer({ person, defaultTab = 'Overview', onClose }: UserDrawerProps) {
+export function UserDrawer({ person, defaultTab = 'Overview', showAgent = false, onClose }: UserDrawerProps) {
   const [tab, setTab] = useState<Tab>(defaultTab);
 
   return (
@@ -59,6 +62,9 @@ export function UserDrawer({ person, defaultTab = 'Overview', onClose }: UserDra
             <div className={styles.meta}>
               <span className={styles.code}>{person.id}</span>
               <Badge tone={STATUS_TONE[person.status]}>{person.status}</Badge>
+              {showAgent && person.agent ? (
+                <span className={styles.owner}>Agent: {person.agent}</span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -73,7 +79,7 @@ export function UserDrawer({ person, defaultTab = 'Overview', onClose }: UserDra
         />
       }
     >
-      {tab === 'Overview' ? <OverviewTab person={person} /> : null}
+      {tab === 'Overview' ? <OverviewTab person={person} showAgent={showAgent} /> : null}
       {tab === 'Bets' ? <BetsTab bets={person.bets} /> : null}
       {tab === 'Transactions' ? <TransactionsTab person={person} /> : null}
       {tab === 'Kyc' ? <KycTab person={person} /> : null}
@@ -90,7 +96,7 @@ const TONE_COLOR = {
   neutral: 'var(--color-text-muted)',
 } as const;
 
-function OverviewTab({ person }: { person: Person }) {
+function OverviewTab({ person, showAgent }: { person: Person; showAgent: boolean }) {
   return (
     <div>
       <div className={styles.metrics}>
@@ -116,6 +122,9 @@ function OverviewTab({ person }: { person: Person }) {
         <p className={styles.panelTitle}>Contact Details</p>
         <DetailRow icon={<MailIcon size={12.991} />} label="Email" value={person.email} />
         <DetailRow icon={<PhoneIcon size={12.991} />} label="Phone" value={person.phone} />
+        {showAgent && person.agent ? (
+          <DetailRow icon={<UserIcon size={12.991} />} label="Agent" value={person.agent} />
+        ) : null}
         <DetailRow icon={<CalendarIcon size={12.991} />} label="Joined" value={person.joined} />
       </div>
 

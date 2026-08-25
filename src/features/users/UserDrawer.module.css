@@ -473,3 +473,11 @@
 .chipRevoke:hover {
   background-color: rgba(239, 68, 68, 0.18);
 }
+
+/* "Agent: Deepak Kumar" beside the status badge in the Franchise view. */
+/* The owning agent reads in green, not the muted grey the other meta uses. */
+.owner {
+  color: var(--color-success);
+  font-size: var(--font-size-2xs);
+  line-height: var(--line-height-2xs);
+}

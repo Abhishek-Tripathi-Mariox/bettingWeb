@@ -4,7 +4,7 @@ import type { IconProps } from '../../icons';
 import { cx } from '../../../lib/cx';
 import styles from './StatCard.module.css';
 
-export type StatAccent = 'blue' | 'cyan' | 'green' | 'yellow' | 'red';
+export type StatAccent = 'blue' | 'cyan' | 'green' | 'yellow' | 'red' | 'live' | 'violet' | 'neutral';
 export type StatTone = 'up' | 'down' | 'flat';
 
 export type StatCardProps = {
@@ -28,6 +28,9 @@ const ACCENT_RGB: Record<StatAccent, string> = {
   green: '34, 197, 94',
   yellow: '250, 204, 21',
   red: '239, 68, 68',
+  live: '255, 46, 99',
+  violet: '139, 92, 246',
+  neutral: '184, 194, 204',
 };
 
 export function StatCard({

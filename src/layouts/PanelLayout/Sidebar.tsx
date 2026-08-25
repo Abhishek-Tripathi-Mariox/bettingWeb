@@ -39,8 +39,8 @@ export function Sidebar({ role, open, onNavigate, onToggle, onSignOut }: Sidebar
       </button>
 
       <div className={styles.identity}>
-        <div className={styles.identityChip}>
-          <Dot />
+        <div className={cx(styles.identityChip, styles[role.accent])}>
+          <Dot tone={role.accent} />
           <div>
             <p className={styles.identityRole}>{role.label}</p>
             <p className={styles.identityUser}>{role.operator} · Online</p>

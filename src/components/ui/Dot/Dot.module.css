@@ -8,6 +8,10 @@
   background-color: var(--color-primary);
 }
 
+.info {
+  background-color: var(--color-primary-light);
+}
+
 .live {
   background-color: var(--color-live);
   opacity: 0.92;
@@ -15,6 +19,10 @@
 
 .success {
   background-color: var(--color-success);
+}
+
+.warning {
+  background-color: var(--color-warning);
 }
 
 .danger {

@@ -154,47 +154,6 @@
   flex-wrap: wrap;
 }
 
-.tabs {
-  display: flex;
-  gap: var(--space-1);
-  flex-wrap: wrap;
-}
-
-.tab {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  border: none;
-  border-radius: var(--radius-sm);
-  background: none;
-  padding: var(--space-3) var(--space-6);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  line-height: var(--line-height-sm);
-  transition: background-color var(--transition-base), color var(--transition-base);
-}
-
-.tab:hover {
-  background-color: var(--color-surface-subtle);
-  color: var(--color-text);
-}
-
-.tabActive,
-.tabActive:hover {
-  background-color: rgba(33, 150, 243, 0.2);
-  color: var(--color-primary);
-}
-
-.tabBadge {
-  border-radius: 10px;
-  background-color: var(--badge-bg);
-  padding: 0 var(--space-2);
-  color: var(--badge-color);
-  font-size: var(--font-size-3xs);
-  line-height: 16.025px;
-}
-
 .toolbarActions {
   display: flex;
   align-items: center;
