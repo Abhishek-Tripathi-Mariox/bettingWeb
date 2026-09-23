@@ -1,10 +1,12 @@
 import { BettingIcon, TargetIcon, TrendingUpIcon, UsersIcon } from '../../components/icons';
 import type { ChartPoint } from '../../components/charts/AreaChart';
 import type { StatCardProps } from '../../components/ui/StatCard/StatCard';
+import { formatCount, formatMoney } from '../../lib/format';
+import type { AnalyticsDimension, AnalyticsHighlights, AnalyticsSeriesPoint } from '../../lib/api/analytics';
 
-export type Highlight = {
+/** A highlight card built from the live `/analytics/highlights` totals. */
+export type AnalyticsHighlightCard = {
   label: string;
-  name: string;
   value: string;
   /** rgb triplet driving the value colour and the 13% border wash. */
   rgb: string;
@@ -32,53 +34,48 @@ export const ANALYTICS_STATS: StatCardProps[] = [
 
 export const ANALYTICS_TABS = ['Revenue', 'Users', 'Sports', 'Commission'] as const;
 
-/**
- * Trend behind each tab — node 112:9261. The Figma frame embeds a Recharts
- * render; per the project's chart rule these are real numbers driving the
- * project's own SVG AreaChart instead of a pasted image.
- */
-export const ANALYTICS_SERIES: Record<string, ChartPoint[]> = {
-  Revenue: [
-    { label: 'Jan', value: 3_200_000 },
-    { label: 'Feb', value: 4_100_000 },
-    { label: 'Mar', value: 4_800_000 },
-    { label: 'Apr', value: 5_600_000 },
-    { label: 'May', value: 6_200_000 },
-    { label: 'Jun', value: 6_900_000 },
-    { label: 'Jul', value: 7_600_000 },
-  ],
-  Users: [
-    { label: 'Jan', value: 1_800_000 },
-    { label: 'Feb', value: 2_300_000 },
-    { label: 'Mar', value: 2_900_000 },
-    { label: 'Apr', value: 3_400_000 },
-    { label: 'May', value: 4_100_000 },
-    { label: 'Jun', value: 4_600_000 },
-    { label: 'Jul', value: 5_200_000 },
-  ],
-  Sports: [
-    { label: 'Jan', value: 2_400_000 },
-    { label: 'Feb', value: 3_100_000 },
-    { label: 'Mar', value: 3_600_000 },
-    { label: 'Apr', value: 4_200_000 },
-    { label: 'May', value: 5_100_000 },
-    { label: 'Jun', value: 5_800_000 },
-    { label: 'Jul', value: 6_400_000 },
-  ],
-  Commission: [
-    { label: 'Jan', value: 900_000 },
-    { label: 'Feb', value: 1_200_000 },
-    { label: 'Mar', value: 1_500_000 },
-    { label: 'Apr', value: 1_800_000 },
-    { label: 'May', value: 2_100_000 },
-    { label: 'Jun', value: 2_400_000 },
-    { label: 'Jul', value: 2_800_000 },
-  ],
+/** Maps a pill-tab label to the `dimension` query param `/analytics/series` expects. */
+export const ANALYTICS_DIMENSION_BY_TAB: Record<(typeof ANALYTICS_TABS)[number], AnalyticsDimension> = {
+  Revenue: 'revenue',
+  Users: 'users',
+  Sports: 'sports',
+  Commission: 'commission',
 };
 
-/** The three highlight cards under the chart — node 112:9342. */
-export const ANALYTICS_HIGHLIGHTS: Highlight[] = [
-  { label: 'Top Franchise', name: 'Bangalore Franchise', value: '₹1.12Cr', rgb: '34, 197, 94' },
-  { label: 'Top Market', name: 'IPL 2024 — Match Winner', value: '₹18.7L', rgb: '33, 150, 243' },
-  { label: 'Top Agent', name: 'Agent A-089 · Deepak', value: '+284%', rgb: '41, 182, 246' },
-];
+const MONTH_FORMAT = new Intl.DateTimeFormat('en-IN', { month: 'short' });
+
+/** "2024-07" -> "Jul". Falls back to the raw string if it doesn't parse. */
+function monthLabel(month: string): string {
+  const [year, monthIndex] = month.split('-').map(Number);
+  if (!year || !monthIndex) return month;
+  const date = new Date(year, monthIndex - 1, 1);
+  return Number.isNaN(date.getTime()) ? month : MONTH_FORMAT.format(date);
+}
+
+/**
+ * Converts a `/analytics/series` response into the project's own SVG
+ * AreaChart's point shape. Revenue/Users/Commission are monthly (`month`
+ * keys); Sports is grouped by sport name (`sport` keys) with no time axis.
+ */
+export function toChartPoints(dimension: AnalyticsDimension, series: AnalyticsSeriesPoint[]): ChartPoint[] {
+  if (dimension === 'sports') {
+    return series.map((point) => ({
+      label: 'sport' in point ? point.sport : '',
+      value: point.value,
+    }));
+  }
+  return series.map((point) => ({
+    label: 'month' in point ? monthLabel(point.month) : '',
+    value: point.value,
+  }));
+}
+
+/** The four highlight cards under the chart — node 112:9342, now fed by `/analytics/highlights`. */
+export function buildHighlightCards(highlights: AnalyticsHighlights): AnalyticsHighlightCard[] {
+  return [
+    { label: 'Total Users', value: formatCount(highlights.totalUsers), rgb: '33, 150, 243' },
+    { label: 'Total Bets', value: formatCount(highlights.totalBets), rgb: '41, 182, 246' },
+    { label: 'Total Turnover', value: formatMoney(highlights.totalTurnover), rgb: '34, 197, 94' },
+    { label: 'Total Commission', value: formatMoney(highlights.totalCommission), rgb: '250, 204, 21' },
+  ];
+}

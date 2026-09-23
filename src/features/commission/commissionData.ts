@@ -2,6 +2,8 @@ import { BuildingIcon, CommissionIcon, GiftIcon, UsersCogIcon } from '../../comp
 import type { BadgeTone } from '../../components/ui/Badge/Badge';
 import type { DonutSlice } from '../../components/charts/DonutChart';
 import type { StatCardProps } from '../../components/ui/StatCard/StatCard';
+import { formatMoney } from '../../lib/format';
+import type { ApiCommission, ApiCommissionEntityRef, ApiCommissionLevel, ApiCommissionStatus } from '../../lib/api/commission';
 
 export type CommissionLevel = 'Franchise' | 'Super Agent' | 'Agent';
 
@@ -16,6 +18,68 @@ export type CommissionRow = {
   commission: string;
   status: SettlementStatus;
 };
+
+export const COMMISSION_LEVELS: ApiCommissionLevel[] = ['Franchise', 'Super Agent', 'Agent'];
+export const COMMISSION_STATUSES: ApiCommissionStatus[] = ['Pending', 'Settled'];
+
+function entityLabel(ref: string | ApiCommissionEntityRef): string {
+  return typeof ref === 'string' ? ref : (ref.name || ref.username || ref._id);
+}
+
+/** Maps live `/commission` rows onto the same `CommissionRow` shape the table already renders — no markup changes needed. */
+export function mapCommissionRows(items: ApiCommission[]): CommissionRow[] {
+  return items.map((item) => ({
+    id: item._id,
+    entity: entityLabel(item.entity),
+    level: item.level,
+    turnover: formatMoney(item.turnover),
+    rate: `${item.rate}%`,
+    commission: formatMoney(item.commission),
+    status: item.status,
+  }));
+}
+
+/** Stat cards derived from the currently loaded (filtered) commission rows — same 4 slots as the dummy `COMMISSION_STATS`. */
+export function commissionStats(items: ApiCommission[]): StatCardProps[] {
+  const total = items.reduce((sum, item) => sum + item.commission, 0);
+  const franchise = items.filter((item) => item.level === 'Franchise').reduce((sum, item) => sum + item.commission, 0);
+  const agent = items.filter((item) => item.level === 'Agent').reduce((sum, item) => sum + item.commission, 0);
+  const pending = items.filter((item) => item.status === 'Pending').reduce((sum, item) => sum + item.commission, 0);
+  const pct = (value: number) => (total > 0 ? `${Math.round((value / total) * 100)}%` : '0%');
+
+  return [
+    {
+      label: 'Total Commission',
+      value: formatMoney(total),
+      caption: 'Current view',
+      icon: CommissionIcon,
+      accent: 'blue',
+      tinted: true,
+    },
+    { label: 'Franchise Share', value: formatMoney(franchise), caption: pct(franchise), icon: BuildingIcon, accent: 'cyan' },
+    { label: 'Agent Share', value: formatMoney(agent), caption: pct(agent), icon: UsersCogIcon, accent: 'green' },
+    { label: 'Pending Settlement', value: formatMoney(pending), caption: 'Awaiting settlement', icon: GiftIcon, accent: 'yellow' },
+  ];
+}
+
+const LEVEL_COLOR: Record<ApiCommissionLevel, string> = {
+  Franchise: '#2196f3',
+  'Super Agent': '#29b6f6',
+  Agent: '#22c55e',
+};
+
+/**
+ * Ring + legend, grouped by level. `DonutChart` normalises each slice against
+ * the sum of `data` itself, so raw commission totals are passed as-is — no
+ * "Platform" slice, since the backend has no such concept.
+ */
+export function commissionSplit(items: ApiCommission[]): DonutSlice[] {
+  return COMMISSION_LEVELS.map((level) => ({
+    label: level,
+    value: items.filter((item) => item.level === level).reduce((sum, item) => sum + item.commission, 0),
+    color: LEVEL_COLOR[level],
+  })).filter((slice) => slice.value > 0);
+}
 
 export const COMMISSION_STATS: StatCardProps[] = [
   {

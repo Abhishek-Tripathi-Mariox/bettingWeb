@@ -47,6 +47,13 @@
   font-weight: var(--font-weight-bold);
 }
 
+.avatarImage {
+  width: 79.991px;
+  height: 79.991px;
+  border-radius: var(--radius-pill);
+  object-fit: cover;
+}
+
 .name {
   padding-top: var(--space-4);
   color: var(--color-text);
@@ -86,6 +93,10 @@
   border-radius: var(--radius-pill);
   background-color: var(--color-live);
   opacity: 0.6;
+}
+
+.hiddenInput {
+  display: none;
 }
 
 .changePhoto {
@@ -213,6 +224,18 @@
 
 .hint {
   color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-xs);
+}
+
+.formError {
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-xs);
+}
+
+.formSuccess {
+  color: var(--color-success);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-xs);
 }

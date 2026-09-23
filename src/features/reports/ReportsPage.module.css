@@ -17,6 +17,12 @@
   gap: var(--grid-gap);
 }
 
+.formError {
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-xs);
+}
+
 .kind {
   border: var(--border-hairline);
   border-radius: var(--radius-lg);

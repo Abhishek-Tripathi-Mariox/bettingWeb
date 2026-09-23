@@ -90,6 +90,24 @@
   outline: none;
 }
 
+/*
+ * Chrome/Edge force their own light autofill background (and, on some
+ * versions, black text) onto a filled field — on this dark theme that
+ * renders as invisible or near-invisible text. Forcing both back to the
+ * theme's colours keeps an autofilled value as legible as a typed one.
+ * The absurdly long transition is the standard trick to beat the browser's
+ * own delayed style injection rather than fighting it with !important.
+ */
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus,
+.input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--color-text);
+  -webkit-box-shadow: 0 0 0 1000px var(--color-surface-input) inset;
+  box-shadow: 0 0 0 1000px var(--color-surface-input) inset;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
 .textarea {
   height: 79.705px;
   padding: 10px var(--space-4);

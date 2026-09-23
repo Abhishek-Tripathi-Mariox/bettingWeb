@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { AlertTriangleIcon, BanIcon, EyeIcon, RefreshIcon, RiskIcon } from '../../components/icons';
 import { Badge } from '../../components/ui/Badge/Badge';
@@ -7,18 +8,80 @@ import type { Column } from '../../components/ui/DataTable/DataTable';
 import { Meter } from '../../components/ui/ProgressBar/ProgressBar';
 import { SectionCard } from '../../components/ui/SectionCard/SectionCard';
 import { StatCard } from '../../components/ui/StatCard/StatCard';
-import {
-  EXPOSURE_ROWS,
-  RISK_LEVEL_TONE,
-  RISK_PANELS,
-  RISK_STATS,
-  RISK_TONE_RGB,
-} from './riskData';
+import { ApiRequestError } from '../../lib/api';
+import { riskApi } from '../../lib/api/risk';
+import type { ApiRiskPanels, ApiRiskStats } from '../../lib/api/risk';
+import { useAuth } from '../auth/authContext';
+import { RISK_LEVEL_TONE, RISK_TONE_RGB, mapExposureRows, mapRiskPanels, riskStats } from './riskData';
 import type { ExposureRow } from './riskData';
 import styles from './RiskPage.module.css';
 
 /** Risk console — node 112:6245. */
 export function RiskPage() {
+  const { accessToken } = useAuth();
+  const [stats, setStats] = useState<ApiRiskStats | null>(null);
+  const [rows, setRows] = useState<ExposureRow[]>([]);
+  const [panels, setPanels] = useState<ApiRiskPanels | null>(null);
+  const [pending, setPending] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [rowPending, setRowPending] = useState<string | null>(null);
+  const [suspendingAll, setSuspendingAll] = useState(false);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    setPending(true);
+    setError(null);
+    Promise.all([riskApi.stats(accessToken), riskApi.exposure(accessToken), riskApi.panels(accessToken)])
+      .then(([statsRes, exposureRes, panelsRes]) => {
+        if (cancelled) return;
+        setStats(statsRes.stats);
+        setRows(mapExposureRows(exposureRes.markets));
+        setPanels(panelsRes);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof ApiRequestError ? err.message : 'Unable to load risk data.');
+      })
+      .finally(() => {
+        if (!cancelled) setPending(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, reloadKey]);
+
+  const statCards = useMemo(() => (stats ? riskStats(stats) : []), [stats]);
+  const panelList = useMemo(() => (panels ? mapRiskPanels(panels) : []), [panels]);
+  const criticalIds = useMemo(() => rows.filter((row) => row.level === 'Critical').map((row) => row.id), [rows]);
+
+  const suspendMarket = async (row: ExposureRow) => {
+    if (!accessToken) return;
+    setRowPending(row.id);
+    try {
+      await riskApi.suspendExposure(row.id, accessToken);
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Unable to suspend this market.');
+    } finally {
+      setRowPending(null);
+    }
+  };
+
+  const suspendAllCritical = async () => {
+    if (!accessToken || criticalIds.length === 0) return;
+    setSuspendingAll(true);
+    try {
+      await Promise.all(criticalIds.map((id) => riskApi.suspendExposure(id, accessToken)));
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Unable to suspend all critical markets.');
+    } finally {
+      setSuspendingAll(false);
+    }
+  };
+
   const columns: Column<ExposureRow>[] = [
     {
       key: 'market',
@@ -74,8 +137,14 @@ export function RiskPage() {
             <EyeIcon size={12} />
           </Button>
           {row.level === 'Critical' ? (
-            <Button className={styles.suspend} size="xs" icon={<BanIcon size={12} />}>
-              Suspend
+            <Button
+              className={styles.suspend}
+              size="xs"
+              icon={<BanIcon size={12} />}
+              onClick={() => suspendMarket(row)}
+              disabled={rowPending === row.id}
+            >
+              {rowPending === row.id ? 'Suspending…' : 'Suspend'}
             </Button>
           ) : null}
         </div>
@@ -86,10 +155,16 @@ export function RiskPage() {
   return (
     <div className={styles.page}>
       <div className={styles.stats}>
-        {RISK_STATS.map((stat) => (
+        {statCards.map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
       </div>
+
+      {error ? (
+        <p role="alert" style={{ color: 'var(--color-danger)', margin: 0, fontSize: 12 }}>
+          {error}
+        </p>
+      ) : null}
 
       <SectionCard
         title="Market Exposure Monitor"
@@ -98,26 +173,37 @@ export function RiskPage() {
         bodySpacing={20}
         action={
           <div className={styles.actions}>
-            <Button className={styles.refresh} size="xs" icon={<RefreshIcon size={12} />}>
+            <Button
+              className={styles.refresh}
+              size="xs"
+              icon={<RefreshIcon size={12} />}
+              onClick={() => setReloadKey((key) => key + 1)}
+            >
               Refresh
             </Button>
-            <Button className={styles.suspendAll} size="xs" icon={<RiskIcon size={12} />}>
-              Suspend All Critical
+            <Button
+              className={styles.suspendAll}
+              size="xs"
+              icon={<RiskIcon size={12} />}
+              onClick={suspendAllCritical}
+              disabled={suspendingAll || criticalIds.length === 0}
+            >
+              {suspendingAll ? 'Suspending…' : 'Suspend All Critical'}
             </Button>
           </div>
         }
       >
         <DataTable
           columns={columns}
-          rows={EXPOSURE_ROWS}
+          rows={rows}
           rowKey={(row) => row.id}
           size="lg"
-          emptyMessage="No open exposure right now."
+          emptyMessage={pending ? 'Loading exposure…' : 'No open exposure right now.'}
         />
       </SectionCard>
 
       <div className={styles.panels}>
-        {RISK_PANELS.map((panel) => (
+        {panelList.map((panel) => (
           <section
             key={panel.title}
             className={styles.panel}
@@ -128,6 +214,7 @@ export function RiskPage() {
               <span className={styles.panelCount}>{panel.count}</span>
             </div>
             <ul className={styles.panelList}>
+              {panel.items.length === 0 ? <li className={styles.panelItem}>Nothing to review.</li> : null}
               {panel.items.map((item) => (
                 <li key={item} className={styles.panelItem}>
                   <AlertTriangleIcon className={styles.panelIcon} size={12} />

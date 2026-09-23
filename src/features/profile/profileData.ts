@@ -63,12 +63,18 @@ export function getProfileTabs(role: RoleDefinition): ProfileTab[] {
     : ALL_TABS.filter((tab) => tab.label !== 'Wallet Activity');
 }
 
+/** "Rahul Kumar" -> ["Rahul", "Kumar"]; a one-word name leaves last blank. */
+export function splitName(name: string): [string, string] {
+  const [first = '', ...rest] = name.trim().split(/\s+/).filter(Boolean);
+  return [first, rest.join(' ')];
+}
+
 /**
- * The sheet is drawn with the signed-in operator, so the name, email and badge
- * follow the panel rather than being fixed to the Super Admin the frames show.
+ * Fallback shown before the real signed-in account loads (or if it fails to)
+ * — drawn from the static role config rather than a real account.
  */
 export function getProfileIdentity(role: RoleDefinition) {
-  const [first = '', last = ''] = role.operator.split(' ');
+  const [first, last] = splitName(role.operator);
   return {
     first,
     last,
@@ -85,19 +91,6 @@ export const QUICK_STATS = [
   { label: 'Last Login', value: 'Today 10:42 AM' },
   { label: 'Member Since', value: 'Jan 2024' },
 ];
-
-/** My Profile tab — nodes 112:11449 and 139:87602. */
-export function getProfileFields(role: RoleDefinition) {
-  const identity = getProfileIdentity(role);
-  return [
-    { label: 'First Name', value: identity.first },
-    { label: 'Last Name', value: identity.last },
-    { label: 'Email', value: identity.email },
-    { label: 'Phone', value: '+91 98765 43210' },
-    { label: 'City', value: 'Mumbai' },
-    { label: 'Timezone', value: 'Asia/Kolkata' },
-  ];
-}
 
 /** Activity tab — node 119:61631. */
 export const PROFILE_ACTIVITY: ActivityEntry[] = [
@@ -133,8 +126,7 @@ export const TRUSTED_DEVICES: TrustedDevice[] = [
   { name: 'MacBook Pro — Chrome 124', lastUsed: 'Last used: 8 days ago, Pune IN' },
 ];
 
-export const PASSWORD_HINT =
-  'Password must be at least 8 characters, with one uppercase, one number and one special character.';
+export const PASSWORD_HINT = 'Password must be at least 6 characters.';
 
 /** Wallet Activity tab — nodes 139:88659 (franchise) and 139:112131 (super agent). */
 export type ProfileWallet = {

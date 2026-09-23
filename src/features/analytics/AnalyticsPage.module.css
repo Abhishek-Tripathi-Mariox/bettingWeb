@@ -21,6 +21,13 @@
   padding-top: var(--space-8);
 }
 
+.chartStatus {
+  padding-top: var(--space-8);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+}
+
 .highlights {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

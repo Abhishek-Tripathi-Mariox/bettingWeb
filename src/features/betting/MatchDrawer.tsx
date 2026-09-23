@@ -1,33 +1,65 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
-import { BanIcon, SettingsIcon } from '../../components/icons';
+import { BanIcon, CheckCircleIcon } from '../../components/icons';
 import { Badge } from '../../components/ui/Badge/Badge';
 import { Button } from '../../components/ui/Button/Button';
 import { Drawer } from '../../components/ui/Drawer/Drawer';
 import { Tabs } from '../../components/ui/Tabs/Tabs';
-import type { Match } from './bettingData';
+import { formatCount, formatMoney, formatStartTime } from '../../lib/format';
+import { ApiRequestError } from '../../lib/api';
+import type { ApiMatch } from '../../lib/api/betting';
+import { eventsApi } from '../../lib/api/events';
+import { useAuth } from '../auth/authContext';
+import { matchBetsCount } from './bettingData';
 import styles from './MatchDrawer.module.css';
 
 const TABS = ['Overview', 'Markets', 'Bets'] as const;
 type Tab = (typeof TABS)[number];
 
+export type MatchDrawerProps = {
+  match: ApiMatch;
+  onClose: () => void;
+  /** Called after this match's status changes, so the board behind it can refresh. */
+  onChanged?: () => void;
+};
+
 /**
  * Match sheet — nodes 119:40667 (overview), 119:42501 (markets) and
  * 119:43428 (bets).
  */
-export function MatchDrawer({ match, onClose }: { match: Match; onClose: () => void }) {
+export function MatchDrawer({ match, onClose, onChanged }: MatchDrawerProps) {
+  const { accessToken } = useAuth();
   const [tab, setTab] = useState<Tab>('Overview');
+  const [current, setCurrent] = useState(match);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  const totalBets = matchBetsCount(current);
   const summary = [
-    { label: 'Markets', value: String(match.markets), color: 'var(--color-primary)' },
-    { label: 'Total Bets', value: match.bets, color: 'var(--color-success)' },
-    { label: 'Stake', value: match.stake, color: 'var(--color-warning)' },
-    { label: 'Exposure', value: match.exposure, color: 'var(--color-live)' },
+    { label: 'Markets', value: String(current.markets.length), color: 'var(--color-primary)' },
+    { label: 'Total Bets', value: formatCount(totalBets), color: 'var(--color-success)' },
+    { label: 'Stake', value: formatMoney(current.stake), color: 'var(--color-warning)' },
+    { label: 'Exposure', value: formatMoney(current.exposure), color: 'var(--color-live)' },
   ];
+
+  const handleToggleStatus = async (status: 'Live' | 'Completed') => {
+    if (!accessToken) return;
+    setPending(true);
+    setError(null);
+    try {
+      const res = await eventsApi.updateStatus(current._id, status, accessToken);
+      setCurrent((prev) => ({ ...prev, ...res.event }));
+      onChanged?.();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Unable to update this match.');
+    } finally {
+      setPending(false);
+    }
+  };
 
   return (
     <Drawer
-      label={`${match.name} details`}
+      label={`${current.name} details`}
       width={600}
       surface="raised"
       headerClassName={styles.header}
@@ -37,18 +69,18 @@ export function MatchDrawer({ match, onClose }: { match: Match; onClose: () => v
         <div className={styles.identity}>
           <div className={styles.titleRow}>
             <span className={styles.emoji} aria-hidden="true">
-              {match.emoji}
+              {current.emoji}
             </span>
-            <span className={styles.name}>{match.name}</span>
-            {match.state === 'Live' ? (
+            <span className={styles.name}>{current.name}</span>
+            {current.status === 'Live' ? (
               <>
                 <span className={styles.liveDot} aria-hidden="true" />
                 <Badge tone="danger">LIVE</Badge>
               </>
             ) : null}
           </div>
-          <p className={styles.league}>{match.league}</p>
-          <p className={styles.score}>{match.score}</p>
+          <p className={styles.league}>{current.league}</p>
+          {current.score ? <p className={styles.score}>{current.score}</p> : null}
 
           <div className={styles.summary}>
             {summary.map((tile) => (
@@ -68,23 +100,31 @@ export function MatchDrawer({ match, onClose }: { match: Match; onClose: () => v
         <Tabs items={TABS} value={tab} variant="underline" aria-label="Match sections" onChange={setTab} />
       }
     >
-      {tab === 'Overview' ? <OverviewTab match={match} /> : null}
+      {error ? (
+        <p className={styles.listCaption} role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {tab === 'Overview' ? (
+        <OverviewTab match={current} totalBets={totalBets} pending={pending} onToggleStatus={handleToggleStatus} />
+      ) : null}
 
       {tab === 'Markets' ? (
         <div className={styles.body}>
-          {match.marketList.map((market) => (
-            <div key={market.name} className={styles.row}>
+          {current.markets.length === 0 ? <p className={styles.listCaption}>No markets for this match yet.</p> : null}
+          {current.markets.map((market) => (
+            <div key={market._id} className={styles.row}>
               <div>
                 <p className={styles.rowTitle}>{market.name}</p>
-                <p className={styles.rowMeta}>{market.meta}</p>
+                <p className={styles.rowMeta}>
+                  {market.type} · {formatCount(market.bets)} bets
+                </p>
               </div>
               <div className={styles.rowActions}>
-                <Badge tone={market.active ? 'success' : 'neutral'}>
-                  {market.active ? 'Active' : 'Closed'}
+                <Badge tone={market.status === 'Active' ? 'success' : 'neutral'}>
+                  {market.status === 'Active' ? 'Active' : 'Closed'}
                 </Badge>
-                <Button className={styles.suspendChip} size="xs">
-                  Suspend
-                </Button>
               </div>
             </div>
           ))}
@@ -93,38 +133,34 @@ export function MatchDrawer({ match, onClose }: { match: Match; onClose: () => v
 
       {tab === 'Bets' ? (
         <div>
-          <p className={styles.listCaption}>Recent {match.betList.length} bets on this match</p>
-          {match.betList.map((bet) => (
-            <article key={bet.id} className={styles.bet}>
-              <span className={styles.avatar}>{bet.user.slice(0, 1)}</span>
-              <div className={styles.betMain}>
-                <p className={styles.betUser}>{bet.user}</p>
-                <p className={styles.betMeta}>
-                  {bet.market} · <span className={styles.selection}>{bet.selection}</span> @{' '}
-                  {bet.odds}
-                </p>
-                <p className={styles.betWhen}>{bet.when}</p>
-              </div>
-              <div className={styles.betRight}>
-                <span className={styles.betAmount}>{bet.amount}</span>
-                <Badge tone={bet.status.tone}>{bet.status.label}</Badge>
-              </div>
-            </article>
-          ))}
+          <p className={styles.listCaption}>
+            The betting board doesn't expose a per-match bet feed yet — see the event's Activity drawer for recent
+            bets on this fixture.
+          </p>
         </div>
       ) : null}
     </Drawer>
   );
 }
 
-function OverviewTab({ match }: { match: Match }) {
+function OverviewTab({
+  match,
+  totalBets,
+  pending,
+  onToggleStatus,
+}: {
+  match: ApiMatch;
+  totalBets: number;
+  pending: boolean;
+  onToggleStatus: (status: 'Live' | 'Completed') => void;
+}) {
   const details = [
-    { label: 'Match ID', value: match.id },
-    { label: 'League', value: match.league },
-    { label: 'Status', value: match.state.toLowerCase() },
-    { label: 'Start Time', value: match.startTime },
-    { label: 'Active Markets', value: String(match.markets) },
-    { label: 'Total Bets', value: match.bets },
+    { label: 'Match ID', value: match._id },
+    { label: 'League', value: match.league || '—' },
+    { label: 'Status', value: match.status.toLowerCase() },
+    { label: 'Start Time', value: match.status === 'Live' ? 'In Play' : formatStartTime(match.startTime) },
+    { label: 'Active Markets', value: String(match.markets.filter((m) => m.status === 'Active').length) },
+    { label: 'Total Bets', value: formatCount(totalBets) },
   ];
 
   return (
@@ -139,12 +175,27 @@ function OverviewTab({ match }: { match: Match }) {
       </div>
 
       <div className={styles.actions}>
-        <Button className={styles.suspend} size="sm" icon={<BanIcon size={13.993} />}>
-          Suspend Match
-        </Button>
-        <Button variant="quiet" size="sm" icon={<SettingsIcon size={13.993} />}>
-          Settings
-        </Button>
+        {match.status === 'Live' ? (
+          <Button
+            className={styles.suspend}
+            size="sm"
+            icon={<BanIcon size={13.993} />}
+            onClick={() => onToggleStatus('Completed')}
+            disabled={pending}
+          >
+            {pending ? 'Suspending…' : 'Suspend Match'}
+          </Button>
+        ) : match.status !== 'Settled' ? (
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<CheckCircleIcon size={13.993} />}
+            onClick={() => onToggleStatus('Live')}
+            disabled={pending}
+          >
+            {pending ? 'Activating…' : 'Activate Match'}
+          </Button>
+        ) : null}
       </div>
     </div>
   );

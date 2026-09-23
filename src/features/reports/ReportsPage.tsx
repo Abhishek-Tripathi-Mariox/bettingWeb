@@ -7,6 +7,9 @@ import { SectionCard } from '../../components/ui/SectionCard/SectionCard';
 import { SelectField } from '../../components/ui/TextField/SelectField';
 import { StatCard } from '../../components/ui/StatCard/StatCard';
 import { TextField } from '../../components/ui/TextField/TextField';
+import { useAuth } from '../auth/authContext';
+import { ApiRequestError } from '../../lib/api';
+import { downloadReportCsv } from '../../lib/api/reports';
 import { ReportPreviewModal } from './ReportPreviewModal';
 import {
   GROUP_BY_OPTIONS,
@@ -17,8 +20,16 @@ import {
 import type { ReportKind } from './reportsData';
 import styles from './ReportsPage.module.css';
 
-/** Reports console — node 112:8228. */
+/**
+ * Reports console — node 112:8228. Shared by every role's Reports page; only
+ * super-admin has a live `/reports` endpoint, so real preview/export calls
+ * are gated on that role and every other role keeps the original dummy-data
+ * behaviour untouched.
+ */
 export function ReportsPage() {
+  const { user, accessToken } = useAuth();
+  const isSuperAdmin = user?.roleId === 'super-admin';
+
   const [preview, setPreview] = useState<ReportKind | null>(null);
   const [form, setForm] = useState({
     type: REPORT_TYPE_OPTIONS[0],
@@ -26,9 +37,31 @@ export function ReportsPage() {
     to: '',
     groupBy: GROUP_BY_OPTIONS[0],
   });
+  const [exportingKind, setExportingKind] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const set = (key: keyof typeof form) => (value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
+
+  const range = { from: form.from || undefined, to: form.to || undefined };
+
+  const handleExport = async (kind: ReportKind) => {
+    if (!isSuperAdmin || !accessToken) return;
+    setExportError(null);
+    setExportingKind(kind.title);
+    try {
+      await downloadReportCsv(kind.slug, range, accessToken);
+    } catch (err) {
+      setExportError(err instanceof ApiRequestError ? err.message : 'Unable to export this report.');
+    } finally {
+      setExportingKind(null);
+    }
+  };
+
+  const handleGenerate = () => {
+    const match = REPORT_KINDS.find((kind) => kind.title === form.type);
+    if (match) setPreview(match);
+  };
 
   return (
     <div className={styles.page}>
@@ -69,8 +102,10 @@ export function ReportsPage() {
                 variant="primary"
                 size="xs"
                 icon={<ExportIcon size={12} />}
+                disabled={isSuperAdmin && (!accessToken || exportingKind === kind.title)}
+                onClick={isSuperAdmin ? () => handleExport(kind) : undefined}
               >
-                Export
+                {isSuperAdmin && exportingKind === kind.title ? 'Exporting…' : 'Export'}
               </Button>
               <Button
                 className={styles.previewBtn}
@@ -84,6 +119,12 @@ export function ReportsPage() {
           </article>
         ))}
       </div>
+
+      {isSuperAdmin && exportError ? (
+        <p className={styles.formError} role="alert">
+          {exportError}
+        </p>
+      ) : null}
 
       <SectionCard
         title="Custom Report Builder"
@@ -123,19 +164,52 @@ export function ReportsPage() {
         </div>
 
         <div className={styles.builderActions}>
-          <Button variant="primary" size="sm" icon={<ReportsIcon size={13.993} />}>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<ReportsIcon size={13.993} />}
+            onClick={handleGenerate}
+          >
             Generate Report
           </Button>
-          <Button className={styles.pdf} size="sm" icon={<ExportIcon size={13.993} />}>
-            Export PDF
+          <Button
+            className={styles.pdf}
+            size="sm"
+            icon={<ExportIcon size={13.993} />}
+            disabled={isSuperAdmin && (!accessToken || exportingKind === form.type)}
+            onClick={
+              isSuperAdmin
+                ? () => {
+                    const match = REPORT_KINDS.find((kind) => kind.title === form.type);
+                    if (match) handleExport(match);
+                  }
+                : undefined
+            }
+          >
+            {isSuperAdmin && exportingKind === form.type ? 'Exporting…' : 'Export PDF'}
           </Button>
-          <Button className={styles.excel} size="sm" icon={<ExportIcon size={13.993} />}>
-            Export Excel
+          <Button
+            className={styles.excel}
+            size="sm"
+            icon={<ExportIcon size={13.993} />}
+            disabled={isSuperAdmin && (!accessToken || exportingKind === form.type)}
+            onClick={
+              isSuperAdmin
+                ? () => {
+                    const match = REPORT_KINDS.find((kind) => kind.title === form.type);
+                    if (match) handleExport(match);
+                  }
+                : undefined
+            }
+          >
+            {isSuperAdmin && exportingKind === form.type ? 'Exporting…' : 'Export Excel'}
           </Button>
         </div>
       </SectionCard>
 
-      {preview ? <ReportPreviewModal kind={preview} onClose={() => setPreview(null)} /> : null}
+      {preview ? (
+        <ReportPreviewModal kind={preview} range={range} onClose={() => setPreview(null)} />
+      ) : null}
     </div>
   );
 }

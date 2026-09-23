@@ -1,0 +1,97 @@
+import { apiRequest } from '../api';
+import type { ApiMarket } from './markets';
+
+export type ApiEventStatus = 'Live' | 'Upcoming' | 'Completed' | 'Settled';
+
+export type ApiEvent = {
+  _id: string;
+  sport: string;
+  league: string;
+  name: string;
+  emoji: string;
+  score: string;
+  /** ISO date string. */
+  startTime: string;
+  status: ApiEventStatus;
+  /** Cached rollups from this event's markets/bets. */
+  stake: number;
+  exposure: number;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ApiEventBetUser = {
+  _id: string;
+  name: string;
+  username: string;
+};
+
+export type ApiEventBet = {
+  _id: string;
+  event: string;
+  market: string;
+  user: ApiEventBetUser | string;
+  selection: string;
+  odds: number;
+  amount: number;
+  status: 'Pending' | 'Won' | 'Lost' | 'Void';
+  placedAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** `GET /events/:id` response — see event.service.js#getEvent. */
+export type ApiEventDetail = {
+  event: ApiEvent;
+  markets: ApiMarket[];
+  /** Last 20 bets placed on this event, newest first. */
+  recentBets: ApiEventBet[];
+};
+
+export type CreateEventPayload = {
+  sport: string;
+  name: string;
+  league?: string;
+  emoji?: string;
+  /** ISO 8601. */
+  startTime: string;
+};
+
+export type ListEventsParams = {
+  status?: ApiEventStatus;
+  sport?: string;
+};
+
+function buildQuery(params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  const qs = search.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export const eventsApi = {
+  list: (params: ListEventsParams = {}, accessToken?: string | null) =>
+    apiRequest<{ events: ApiEvent[] }>(`/events${buildQuery(params)}`, { accessToken }),
+
+  get: (id: string, accessToken?: string | null) =>
+    apiRequest<ApiEventDetail>(`/events/${id}`, { accessToken }),
+
+  create: (payload: CreateEventPayload, accessToken?: string | null) =>
+    apiRequest<{ event: ApiEvent }>('/events', { method: 'POST', body: payload, accessToken }),
+
+  /**
+   * Note: `EVENT_STATUSES` (backend/src/constants/admin.js) is
+   * `['Live', 'Upcoming', 'Completed', 'Settled']` — there is no 'Suspended'
+   * event status, even though event.service.js#updateEventStatus has a
+   * dead branch checking for it. Only pass one of the four real statuses.
+   */
+  updateStatus: (id: string, status: ApiEventStatus, accessToken?: string | null) =>
+    apiRequest<{ event: ApiEvent }>(`/events/${id}/status`, {
+      method: 'PATCH',
+      body: { status },
+      accessToken,
+    }),
+};

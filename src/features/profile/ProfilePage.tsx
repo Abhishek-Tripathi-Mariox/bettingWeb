@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -11,11 +11,14 @@ import { Badge } from '../../components/ui/Badge/Badge';
 import { Button } from '../../components/ui/Button/Button';
 import { DataTable } from '../../components/ui/DataTable/DataTable';
 import type { Column } from '../../components/ui/DataTable/DataTable';
-import { TextAreaField } from '../../components/ui/TextField/TextAreaField';
 import { TextField } from '../../components/ui/TextField/TextField';
 import { MetricTile } from '../../components/ui/MetricTile/MetricTile';
 import { Switch } from '../../components/ui/Switch/Switch';
 import type { RoleDefinition } from '../../config/roles';
+import { useAuth } from '../auth/authContext';
+import { ApiRequestError, authApi } from '../../lib/api';
+import type { ApiUser } from '../../lib/api';
+import { resizeImageToDataUri } from '../../lib/image';
 import { cx } from '../../lib/cx';
 import {
   LOGIN_HISTORY,
@@ -27,39 +30,65 @@ import {
   PROFILE_PREFERENCES,
   QUICK_STATS,
   TRUSTED_DEVICES,
-  getProfileFields,
   getProfileIdentity,
   getProfileTabs,
   getProfileWallet,
+  splitName,
 } from './profileData';
 import type { LoginEvent, ProfileWallet } from './profileData';
 import styles from './ProfilePage.module.css';
 
 /** Account profile — node 112:11449 plus its six other tab states. */
 export function ProfilePage({ role }: { role: RoleDefinition }) {
+  const { accessToken, setTokens } = useAuth();
   const tabs = getProfileTabs(role);
   const wallet = getProfileWallet(role);
   const [tab, setTab] = useState<string>(tabs[0].label);
-  const identity = getProfileIdentity(role);
+
+  // The live signed-in account — every role (super-admin, franchise, super-agent,
+  // agent) shares this same page, so it's fetched rather than derived from `role`.
+  const [user, setUser] = useState<ApiUser | null>(null);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    authApi
+      .me(accessToken)
+      .then((res) => {
+        if (!cancelled) setUser(res.user);
+      })
+      .catch(() => {
+        // The identity card falls back to the role's mock identity below.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
+
+  const fallback = getProfileIdentity(role);
+  const displayName = user ? user.name || fallback.name : fallback.name;
+  const displayEmail = user ? user.email || fallback.email : fallback.email;
 
   return (
     <div className={styles.page}>
       <aside className={styles.rail}>
         <section className={styles.card}>
           <div className={styles.identity}>
-            <span className={styles.avatar}>{identity.name.slice(0, 1)}</span>
-            <p className={styles.name}>{identity.name}</p>
-            <p className={styles.email}>{identity.email}</p>
+            {user?.avatar ? (
+              <img src={user.avatar} alt="" className={styles.avatarImage} />
+            ) : (
+              <span className={styles.avatar}>{displayName.slice(0, 1)}</span>
+            )}
+            <p className={styles.name}>{displayName}</p>
+            <p className={styles.email}>{displayEmail}</p>
             <div className={styles.identityMeta}>
-              <Badge tone={role.accent}>{identity.role}</Badge>
+              <Badge tone={role.accent}>{fallback.role}</Badge>
               <span className={styles.presence}>
                 <span className={styles.presenceDot} aria-hidden="true" />
-                {identity.presence}
+                {fallback.presence}
               </span>
             </div>
-            <Button className={styles.changePhoto} size="xs" block>
-              Change Photo
-            </Button>
+            <ChangePhotoButton accessToken={accessToken} disabled={!user} onUpdated={setUser} />
           </div>
         </section>
 
@@ -92,8 +121,18 @@ export function ProfilePage({ role }: { role: RoleDefinition }) {
       </aside>
 
       <div className={styles.body}>
-        {tab === 'My Profile' ? <EditProfileTab role={role} /> : null}
-        {tab === 'Change Password' ? <ChangePasswordTab /> : null}
+        {tab === 'My Profile' ? (
+          <EditProfileTab
+            key={user?._id ?? 'pending'}
+            role={role}
+            user={user}
+            accessToken={accessToken}
+            onSaved={setUser}
+          />
+        ) : null}
+        {tab === 'Change Password' ? (
+          <ChangePasswordTab accessToken={accessToken} onChanged={setTokens} />
+        ) : null}
         {tab === 'Wallet Activity' && wallet ? <WalletActivityTab wallet={wallet} /> : null}
         {tab === 'Activity' ? <ActivityTab /> : null}
         {tab === 'Login History' ? <LoginHistoryTab /> : null}
@@ -122,22 +161,139 @@ function TabCard({
   );
 }
 
-function EditProfileTab({ role }: { role: RoleDefinition }) {
+/** The avatar's "Change Photo" action — resizes the picked file and saves it immediately. */
+function ChangePhotoButton({
+  accessToken,
+  disabled,
+  onUpdated,
+}: {
+  accessToken: string | null;
+  disabled: boolean;
+  onUpdated: (user: ApiUser) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Reset so picking the same file again still fires a change event.
+    event.target.value = '';
+    if (!file || !accessToken) return;
+
+    setPending(true);
+    setError(null);
+    try {
+      const avatar = await resizeImageToDataUri(file);
+      const result = await authApi.updateProfile(accessToken, { avatar });
+      onUpdated(result.user);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Could not update your photo.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className={styles.hiddenInput}
+        onChange={handleChange}
+      />
+      <Button
+        className={styles.changePhoto}
+        size="xs"
+        block
+        disabled={disabled || pending}
+        onClick={() => inputRef.current?.click()}
+      >
+        {pending ? 'Uploading…' : 'Change Photo'}
+      </Button>
+      {error ? (
+        <p className={styles.formError} role="alert">
+          {error}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function EditProfileTab({
+  role,
+  user,
+  accessToken,
+  onSaved,
+}: {
+  role: RoleDefinition;
+  user: ApiUser | null;
+  accessToken: string | null;
+  onSaved: (user: ApiUser) => void;
+}) {
+  const fallback = getProfileIdentity(role);
+  const [savedFirst, savedLast] = user ? splitName(user.name) : [fallback.first, fallback.last];
+
+  const [firstName, setFirstName] = useState(savedFirst);
+  const [lastName, setLastName] = useState(savedLast);
+  const [email, setEmail] = useState(user?.email ?? fallback.email);
+  const [phone, setPhone] = useState(user?.phone ?? '');
+  const [city, setCity] = useState(user?.city ?? '');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const handleSave = async () => {
+    if (!accessToken) return;
+    setPending(true);
+    setError(null);
+    setSuccess(false);
+    try {
+      const result = await authApi.updateProfile(accessToken, {
+        name: `${firstName} ${lastName}`.trim(),
+        email,
+        phone,
+        city,
+      });
+      onSaved(result.user);
+      setSuccess(true);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Unable to reach the server. Please try again.');
+    } finally {
+      setPending(false);
+    }
+  };
+
   return (
     <TabCard title="Edit Profile" subtitle="Update your personal information">
       <div className={styles.grid}>
-        {getProfileFields(role).map((field) => (
-          <TextField key={field.label} label={field.label} defaultValue={field.value} />
-        ))}
-        <TextAreaField
-          fieldClassName={styles.wide}
-          label="Bio"
-          placeholder="Tell us about yourself..."
+        <TextField label="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+        <TextField label="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+        <TextField
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
         />
+        <TextField label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <TextField label="City" value={city} onChange={(e) => setCity(e.target.value)} />
       </div>
+      {error ? (
+        <p className={styles.formError} role="alert">
+          {error}
+        </p>
+      ) : null}
+      {success ? <p className={styles.formSuccess}>Profile updated.</p> : null}
       <div className={styles.actions}>
-        <Button variant="primary" size="sm" icon={<CheckCircleIcon size={13.993} />}>
-          Save Profile
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<CheckCircleIcon size={13.993} />}
+          disabled={pending || !accessToken}
+          onClick={handleSave}
+        >
+          {pending ? 'Saving…' : 'Save Profile'}
         </Button>
       </div>
     </TabCard>
@@ -202,18 +358,93 @@ function WalletActivityTab({ wallet }: { wallet: ProfileWallet }) {
   );
 }
 
-function ChangePasswordTab() {
+function ChangePasswordTab({
+  accessToken,
+  onChanged,
+}: {
+  accessToken: string | null;
+  onChanged: (accessToken: string, refreshToken: string) => void;
+}) {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async () => {
+    setError(null);
+    setSuccess(false);
+    if (!accessToken) return;
+    if (newPassword !== confirmPassword) {
+      setError('New password and confirmation do not match.');
+      return;
+    }
+
+    setPending(true);
+    try {
+      // Changing the password revokes every previously issued token
+      // (including this session's own), so the fresh pair below has to
+      // replace it or the very next authenticated request would 401.
+      const result = await authApi.changePassword(accessToken, { currentPassword, newPassword });
+      onChanged(result.accessToken, result.refreshToken);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setSuccess(true);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Unable to reach the server. Please try again.');
+    } finally {
+      setPending(false);
+    }
+  };
+
   return (
     <TabCard title="Change Password" subtitle="Use a strong, unique password for your account">
       <div className={styles.stack}>
-        <TextField label="Current Password" type="password" defaultValue="password1234" />
-        <TextField label="New Password" type="password" placeholder="Min. 8 characters" />
-        <TextField label="Confirm New Password" type="password" placeholder="Repeat new password" />
+        <TextField
+          label="Current Password"
+          type="password"
+          name="current-password"
+          autoComplete="current-password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+        />
+        <TextField
+          label="New Password"
+          type="password"
+          name="new-password"
+          autoComplete="new-password"
+          placeholder="Min. 6 characters"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+        />
+        <TextField
+          label="Confirm New Password"
+          type="password"
+          name="confirm-password"
+          autoComplete="new-password"
+          placeholder="Repeat new password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+        />
+        {error ? (
+          <p className={styles.formError} role="alert">
+            {error}
+          </p>
+        ) : null}
+        {success ? <p className={styles.formSuccess}>Password updated.</p> : null}
         <p className={styles.hint}>{PASSWORD_HINT}</p>
       </div>
       <div className={styles.actions}>
-        <Button variant="primary" size="sm" icon={<CheckCircleIcon size={13.993} />}>
-          Update Password
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<CheckCircleIcon size={13.993} />}
+          disabled={pending || !accessToken || !currentPassword || newPassword.length < 6}
+          onClick={handleSubmit}
+        >
+          {pending ? 'Updating…' : 'Update Password'}
         </Button>
       </div>
     </TabCard>

@@ -1,6 +1,16 @@
 import { AlertTriangleIcon, RiskIcon, TrendingUpIcon, UsersIcon } from '../../components/icons';
 import type { BadgeTone } from '../../components/ui/Badge/Badge';
 import type { StatCardProps } from '../../components/ui/StatCard/StatCard';
+import { formatCount, formatMoney } from '../../lib/format';
+import type {
+  ApiFlaggedUser,
+  ApiLargePendingRequest,
+  ApiRiskMarket,
+  ApiRiskPanels,
+  ApiRiskStats,
+  ApiRiskUserRef,
+  ApiSuspiciousPattern,
+} from '../../lib/api/risk';
 
 export type RiskLevel = 'Normal' | 'Warning' | 'Critical';
 
@@ -32,13 +42,6 @@ export type RiskPanel = {
   items: string[];
 };
 
-export const RISK_STATS: StatCardProps[] = [
-  { label: 'Net Exposure', value: '₹68.1L', caption: 'Across all markets', icon: RiskIcon, accent: 'red' },
-  { label: 'Critical Markets', value: '2', caption: 'Require action', icon: AlertTriangleIcon, accent: 'live' },
-  { label: 'Max Liability', value: '₹1.84Cr', caption: 'If all open bets win', icon: TrendingUpIcon, accent: 'yellow' },
-  { label: 'High-Risk Users', value: '48', caption: 'Flagged this session', icon: UsersIcon, accent: 'red' },
-];
-
 export const RISK_LEVEL_TONE: Record<RiskLevel, BadgeTone> = {
   Normal: 'success',
   Warning: 'warning',
@@ -56,32 +59,148 @@ export const RISK_TONE_RGB: Record<RiskTone, string> = {
   live: '255, 46, 99',
 };
 
-/** The monitor from node 112:6245. */
-export const EXPOSURE_ROWS: ExposureRow[] = [
-  { id: 'RX1', emoji: '🏏', market: 'India vs Australia — Match Winner', exposure: '₹1.9Cr', limit: '₹2.5Cr', utilization: 75, tone: 'warning', activeBets: '1,842', level: 'Normal' },
-  { id: 'RX2', emoji: '🏏', market: 'Mumbai vs Chennai — Match Winner', live: true, exposure: '₹2.4Cr', limit: '₹2.5Cr', utilization: 97, tone: 'danger', activeBets: '3,241', level: 'Critical' },
-  { id: 'RX3', emoji: '⚽', market: 'Man City vs Arsenal — Match Result', exposure: '₹86.0L', limit: '₹1.5Cr', utilization: 57, tone: 'success', activeBets: '1,234', level: 'Normal' },
-  { id: 'RX4', emoji: '🎾', market: 'Djokovic vs Alcaraz — Set Winner', exposure: '₹42.0L', limit: '₹1.0Cr', utilization: 42, tone: 'success', activeBets: '892', level: 'Normal' },
-  { id: 'RX5', emoji: '🏏', market: 'IPL 2024 — Top Batsman', exposure: '₹1.2Cr', limit: '₹2.0Cr', utilization: 62, tone: 'success', activeBets: '2,841', level: 'Warning' },
-];
+/**
+ * The backend stores no risk "level" on a market — it's derived here from
+ * exposure/maxExposure utilization. Mirrors `risk.service.js#getStats`'
+ * own `exposure >= maxExposure` cutoff for Critical.
+ */
+const WARNING_UTILIZATION = 60;
 
-export const RISK_PANELS: RiskPanel[] = [
-  {
+function utilizationOf(market: ApiRiskMarket): number {
+  if (!market.maxExposure) return 0;
+  return Math.min(100, Math.round((market.exposure / market.maxExposure) * 100));
+}
+
+function levelOf(utilization: number): RiskLevel {
+  if (utilization >= 100) return 'Critical';
+  if (utilization >= WARNING_UTILIZATION) return 'Warning';
+  return 'Normal';
+}
+
+const LEVEL_TO_RISK_TONE: Record<RiskLevel, RiskTone> = {
+  Normal: 'success',
+  Warning: 'warning',
+  Critical: 'danger',
+};
+
+/** Sport → emoji, matched loosely (case-insensitive) since the backend only supplies a free-text sport string. */
+const SPORT_EMOJI: Record<string, string> = {
+  cricket: '🏏',
+  football: '⚽',
+  soccer: '⚽',
+  tennis: '🎾',
+  basketball: '🏀',
+  kabaddi: '🤼',
+  hockey: '🏑',
+  horse: '🏇',
+  'horse racing': '🏇',
+};
+
+const SPORT_EMOJI_FALLBACK = '🎯';
+
+function eventOf(market: ApiRiskMarket) {
+  return typeof market.event === 'string' ? null : market.event;
+}
+
+export function marketEmoji(market: ApiRiskMarket): string {
+  const sport = eventOf(market)?.sport?.toLowerCase().trim() ?? '';
+  return SPORT_EMOJI[sport] ?? SPORT_EMOJI_FALLBACK;
+}
+
+function marketLabel(market: ApiRiskMarket): string {
+  const event = eventOf(market);
+  return event ? `${event.name} — ${market.name}` : market.name;
+}
+
+export function riskStats(stats: ApiRiskStats): StatCardProps[] {
+  return [
+    {
+      label: 'Critical Markets',
+      value: formatCount(stats.highExposureMarkets),
+      caption: 'Exposure at or above limit',
+      icon: AlertTriangleIcon,
+      accent: 'live',
+    },
+    {
+      label: 'High-Risk Users',
+      value: formatCount(stats.flaggedCount),
+      caption: 'Flagged for manual review',
+      icon: UsersIcon,
+      accent: 'red',
+    },
+    {
+      label: 'Suspicious Patterns',
+      value: formatCount(stats.patternCount),
+      caption: 'Unresolved detections',
+      icon: RiskIcon,
+      accent: 'yellow',
+    },
+    {
+      label: 'Large Pending',
+      value: formatCount(stats.largePendingRequests),
+      caption: 'Wallet requests ≥ ₹50K',
+      icon: TrendingUpIcon,
+      accent: 'red',
+    },
+  ];
+}
+
+export function mapExposureRows(markets: ApiRiskMarket[]): ExposureRow[] {
+  return markets.map((market) => {
+    const utilization = utilizationOf(market);
+    const level = levelOf(utilization);
+    return {
+      id: market._id,
+      emoji: marketEmoji(market),
+      market: marketLabel(market),
+      live: level === 'Critical',
+      exposure: formatMoney(market.exposure),
+      limit: formatMoney(market.maxExposure),
+      utilization,
+      tone: LEVEL_TO_RISK_TONE[level],
+      activeBets: formatCount(market.bets),
+      level,
+    };
+  });
+}
+
+function userLabel(ref: string | ApiRiskUserRef): string {
+  return typeof ref === 'string' ? ref : (ref.name || ref.username || ref._id);
+}
+
+function mapFlaggedUsers(flaggedUsers: ApiFlaggedUser[]): RiskPanel {
+  return {
     title: 'High Risk Users',
-    count: '48',
+    count: formatCount(flaggedUsers.length),
     tone: 'danger',
-    items: ['Vikram Singh (Score: 94)', 'Rahul Verma (Score: 88)', 'Ankit Jain (Score: 82)'],
-  },
-  {
+    items: flaggedUsers.slice(0, 3).map((item) => `${userLabel(item.user)} (Score: ${item.score})`),
+  };
+}
+
+function mapPatterns(patterns: ApiSuspiciousPattern[]): RiskPanel {
+  return {
     title: 'Suspicious Patterns',
-    count: '12',
+    count: formatCount(patterns.length),
     tone: 'warning',
-    items: ['Multiple accounts: IP 192.168.1.x', 'Rapid bet placement: U007', 'Arbitrage pattern: U024'],
-  },
-  {
+    items: patterns.slice(0, 3).map((item) => item.description),
+  };
+}
+
+function kindLabel(kind: ApiLargePendingRequest['kind']): string {
+  return kind === 'deposit' ? 'deposit' : 'withdrawal';
+}
+
+function mapLargePending(requests: ApiLargePendingRequest[]): RiskPanel {
+  return {
     title: 'Large Pending',
-    count: '8',
+    count: formatCount(requests.length),
     tone: 'live',
-    items: ['₹5L withdrawal: Vikram Singh', '₹3L withdrawal: Franchise F003', '₹2.5L deposit: Unknown UTR'],
-  },
-];
+    items: requests
+      .slice(0, 3)
+      .map((item) => `${formatMoney(item.amount)} ${kindLabel(item.kind)}: ${userLabel(item.user)}`),
+  };
+}
+
+export function mapRiskPanels(panels: ApiRiskPanels): RiskPanel[] {
+  return [mapFlaggedUsers(panels.flaggedUsers), mapPatterns(panels.patterns), mapLargePending(panels.largePendingRequests)];
+}

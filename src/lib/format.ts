@@ -28,3 +28,44 @@ export function formatPercent(value: number, digits = 1): string {
 function trim(value: number): string {
   return value.toFixed(2).replace(/\.?0+$/, '');
 }
+
+/** "2 min ago", "3 hr ago", "5 Sep" — used for bet/activity timestamps. */
+export function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '—';
+  const diffMs = Date.now() - then;
+  const diffSec = Math.round(diffMs / 1000);
+  if (diffSec < 60) return 'just now';
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hr ago`;
+  const diffDay = Math.round(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+}
+
+/** "Today 7:30 PM", "Tomorrow 8:00 PM", "12 Sep, 3:30 PM" — event/match start times. */
+export function formatStartTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  const now = new Date();
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const dayDiff = Math.round((startOfDay(date) - startOfDay(now)) / 86_400_000);
+  const time = date.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  if (dayDiff === 0) return `Today ${time}`;
+  if (dayDiff === 1) return `Tomorrow ${time}`;
+  return `${date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, ${time}`;
+}
+
+/** True when the ISO timestamp falls on today's local date — used for "X today" stat tiles. */
+export function isToday(iso: string): boolean {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return false;
+  const now = new Date();
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
+}
