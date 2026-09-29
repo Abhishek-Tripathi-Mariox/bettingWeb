@@ -147,3 +147,16 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Format chips on a report card are its quick exports. */
+.formatButton {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.formatButton:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}

@@ -22,6 +22,11 @@ export type ApiMarket = {
   maxBet: number;
   maxExposure: number;
   status: ApiMarketStatus;
+  /** Backable selections; empty = the event's two sides at back / lay odds. */
+  runners?: { name: string; odds: number }[];
+  /** Set once the market is settled. */
+  winner?: string | null;
+  settledAt?: string | null;
   /** Cached rollups from this market's bets. */
   bets: number;
   stake: number;
@@ -40,6 +45,8 @@ export type CreateMarketPayload = {
   maxBet?: number;
   maxExposure?: number;
   status?: ApiMarketStatus;
+  /** What players can back, each at its own price. Back / lay odds follow the first two. */
+  runners?: { name: string; odds: number }[];
 };
 
 export type UpdateMarketPayload = Partial<Omit<CreateMarketPayload, 'event'>>;
@@ -74,6 +81,14 @@ export const marketsApi = {
     apiRequest<{ market: ApiMarket }>(`/markets/${id}/status`, {
       method: 'PATCH',
       body: { status },
+      accessToken,
+    }),
+
+  /** Settles every open bet on the market with `winner` and closes it for good. */
+  settle: (id: string, winner: string, accessToken?: string | null) =>
+    apiRequest<{ market: ApiMarket; settled: number; won: number; lost: number }>(`/markets/${id}/settle`, {
+      method: 'POST',
+      body: { winner },
       accessToken,
     }),
 

@@ -1,19 +1,27 @@
 import { Dot } from '../../components/ui/Dot/Dot';
-import { APP, PLATFORM_STATUS } from '../../config/app';
+import { APP } from '../../config/app';
 import styles from './StatusBar.module.css';
+import { formatUptime, usePlatformStatus } from './usePlatformStatus';
 
-/** Bottom status strip: health metrics on the left, build stamp on the right. */
+/** Bottom status strip: live health metrics on the left, build stamp on the right. */
 export function StatusBar({ clock }: { clock: string }) {
+  const health = usePlatformStatus();
+  const connected = health?.status === 'ok';
+
   return (
     <footer className={styles.bar}>
       <div className={styles.metrics}>
         <span className={styles.metric}>
-          <Dot tone="success" size={5.994} />
-          {PLATFORM_STATUS.api}
+          <Dot tone={connected ? 'success' : 'live'} size={5.994} />
+          {health ? (connected ? 'API Connected' : 'Database degraded') : 'API Unreachable'}
         </span>
-        <span className={styles.metric}>{PLATFORM_STATUS.db}</span>
-        <span className={styles.metric}>{PLATFORM_STATUS.cpu}</span>
-        <span className={styles.metric}>{PLATFORM_STATUS.uptime}</span>
+        {health ? (
+          <>
+            <span className={styles.metric}>DB: {health.dbMs}ms</span>
+            <span className={styles.metric}>CPU: {health.cpu}%</span>
+            <span className={styles.metric}>Uptime: {formatUptime(health.uptimeSeconds)}</span>
+          </>
+        ) : null}
       </div>
       <span className={styles.build}>
         {APP.build} · IST {clock}

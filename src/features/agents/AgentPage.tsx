@@ -1,12 +1,5 @@
-import { useMemo, useState } from 'react';
-import {
-  BanIcon,
-  CheckCircleIcon,
-  ExportIcon,
-  EyeIcon,
-  PencilIcon,
-  PlusIcon,
-} from '../../components/icons';
+import { useState } from 'react';
+import { BanIcon, CheckCircleIcon, EyeIcon, PencilIcon, PlusIcon } from '../../components/icons';
 import { Badge } from '../../components/ui/Badge/Badge';
 import { Button } from '../../components/ui/Button/Button';
 import { Checkbox } from '../../components/ui/Checkbox/Checkbox';
@@ -17,45 +10,49 @@ import { Pagination } from '../../components/ui/Pagination/Pagination';
 import { SearchInput } from '../../components/ui/SearchInput/SearchInput';
 import { StatCard } from '../../components/ui/StatCard/StatCard';
 import { Tabs } from '../../components/ui/Tabs/Tabs';
-import type { RoleDefinition } from '../../config/roles';
+import type { NetworkAccount, NetworkRow } from '../../lib/api/network';
+import { formatMoney, formatRupees } from '../../lib/format';
+import { StaffFormModal } from '../superAgents/StaffFormModal';
+import { formatDate, statusLabel } from '../users/usersData';
+import { useNetworkList, useStatusToggle } from '../users/useNetworkList';
 import { AgentDrawer } from './AgentDrawer';
-import { CreateAgentModal } from './CreateAgentModal';
-import { AGENT_STATUS_TONE, getAgentView } from './agentsData';
-import type { AgentRow } from './agentsData';
+import { AGENT_STATUS_TONE, agentStats } from './agentsData';
 import styles from './AgentPage.module.css';
 
-const FILTERS = ['All', 'Active', 'Suspended', 'Inactive'] as const;
+const FILTERS = ['All', 'Active', 'Suspended'] as const;
 type Filter = (typeof FILTERS)[number];
 
-/** Agent directory from node 112:1579. */
-export function AgentPage({ role }: { role: RoleDefinition }) {
-  const { rows, stats, total } = useMemo(() => getAgentView(role), [role]);
+const PAGE_SIZE = 10;
 
+/** Agent directory from node 112:1579, scoped to the signed-in account's downline. */
+export function AgentPage() {
   const [filter, setFilter] = useState<Filter>('All');
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
-  const [created, setCreated] = useState<AgentRow[]>([]);
-  const [creating, setCreating] = useState(false);
-  const [open, setOpen] = useState<AgentRow | null>(null);
+  /** null = closed, 'new' = Create, an account = Edit. */
+  const [form, setForm] = useState<NetworkAccount | 'new' | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return [...created, ...rows].filter((row) => {
-      const matchesFilter = filter === 'All' || row.status === filter;
-      const matchesQuery =
-        !needle ||
-        row.name.toLowerCase().includes(needle) ||
-        row.code.toLowerCase().includes(needle);
-      return matchesFilter && matchesQuery;
-    });
-  }, [created, rows, filter, query]);
+  const { data, loading, error, reload } = useNetworkList({
+    role: 'agent',
+    status: filter === 'All' ? undefined : filter === 'Active' ? 'active' : 'suspended',
+    q: query,
+    page,
+    limit: PAGE_SIZE,
+  });
+  const { busyId, toggle } = useStatusToggle(reload, setActionError);
 
-  const toggle = (id: string) =>
+  const rows = data?.items ?? [];
+  const abilities = data?.abilities ?? { create: false, edit: false, suspend: false };
+  const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
+
+  const toggleOne = (id: string) =>
     setSelected((ids) => (ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id]));
-  const allSelected = visible.length > 0 && visible.every((row) => selected.includes(row.id));
+  const allSelected = rows.length > 0 && rows.every((row) => selected.includes(row._id));
 
-  const columns: Column<AgentRow>[] = [
+  const columns: Column<NetworkRow>[] = [
     {
       key: 'select',
       width: 44,
@@ -64,59 +61,82 @@ export function AgentPage({ role }: { role: RoleDefinition }) {
           label=""
           aria-label="Select all agents"
           checked={allSelected}
-          onChange={(event) => setSelected(event.target.checked ? visible.map((row) => row.id) : [])}
+          onChange={(event) => setSelected(event.target.checked ? rows.map((row) => row._id) : [])}
         />
       ),
       render: (row) => (
         <Checkbox
           label=""
-          aria-label={`Select ${row.name}`}
-          checked={selected.includes(row.id)}
-          onChange={() => toggle(row.id)}
+          aria-label={`Select ${row.name || row.username}`}
+          checked={selected.includes(row._id)}
+          onChange={() => toggleOne(row._id)}
         />
       ),
     },
-    { key: 'code', header: 'Agent ID', render: (row) => <span className={styles.id}>{row.code}</span> },
-    { key: 'name', header: 'Name', render: (row) => <span className={styles.name}>{row.name}</span> },
-    { key: 'users', header: 'Users', render: (row) => <span className={styles.name}>{row.users}</span> },
+    { key: 'code', header: 'Agent ID', render: (row) => <span className={styles.id}>{row.username}</span> },
+    { key: 'name', header: 'Name', render: (row) => <span className={styles.name}>{row.name || row.username}</span> },
+    { key: 'users', header: 'Users', render: (row) => <span className={styles.name}>{row.summary.players}</span> },
     {
       key: 'turnover',
       header: 'Turnover',
-      render: (row) => <span className={styles.turnover}>{row.turnover}</span>,
+      render: (row) => <span className={styles.turnover}>{formatMoney(row.summary.turnover)}</span>,
     },
     {
       key: 'commission',
       header: 'Commission',
-      render: (row) => <span className={styles.commission}>{row.commission}</span>,
+      render: (row) => <span className={styles.commission}>{formatMoney(row.summary.commission)}</span>,
     },
-    { key: 'wallet', header: 'Wallet', render: (row) => <span className={styles.wallet}>{row.wallet}</span> },
-    { key: 'joined', header: 'Joined', render: (row) => <span className={styles.muted}>{row.joined}</span> },
+    {
+      key: 'wallet',
+      header: 'Wallet',
+      render: (row) => <span className={styles.wallet}>{formatRupees(row.walletBalance)}</span>,
+    },
+    { key: 'joined', header: 'Joined', render: (row) => <span className={styles.muted}>{formatDate(row.createdAt)}</span> },
     {
       key: 'status',
       header: 'Status',
-      render: (row) => <Badge tone={AGENT_STATUS_TONE[row.status]}>{row.status}</Badge>,
+      render: (row) => <Badge tone={AGENT_STATUS_TONE[statusLabel(row)]}>{statusLabel(row)}</Badge>,
     },
     {
       key: 'actions',
       header: 'Actions',
-      render: (row) => (
-        <div className={styles.rowActions}>
-          <IconButton icon={EyeIcon} label={`View ${row.name}`} onClick={() => setOpen(row)} />
-          <IconButton icon={PencilIcon} tone="warning" label={`Edit ${row.name}`} />
-          {row.status === 'Active' ? (
-            <IconButton icon={BanIcon} tone="danger" label={`Block ${row.name}`} />
-          ) : (
-            <IconButton icon={CheckCircleIcon} tone="success" label={`Reactivate ${row.name}`} />
-          )}
-        </div>
-      ),
+      render: (row) => {
+        const name = row.name || row.username;
+        return (
+          <div className={styles.rowActions}>
+            <IconButton icon={EyeIcon} label={`View ${name}`} onClick={() => setOpenId(row._id)} />
+            {abilities.edit ? (
+              <IconButton icon={PencilIcon} tone="warning" label={`Edit ${name}`} onClick={() => setForm(row)} />
+            ) : null}
+            {abilities.suspend ? (
+              row.status === 'active' ? (
+                <IconButton
+                  icon={BanIcon}
+                  tone="danger"
+                  label={`Block ${name}`}
+                  disabled={busyId === row._id}
+                  onClick={() => toggle(row._id, 'suspended')}
+                />
+              ) : (
+                <IconButton
+                  icon={CheckCircleIcon}
+                  tone="success"
+                  label={`Reactivate ${name}`}
+                  disabled={busyId === row._id}
+                  onClick={() => toggle(row._id, 'active')}
+                />
+              )
+            ) : null}
+          </div>
+        );
+      },
     },
   ];
 
   return (
     <div className={styles.page}>
       <div className={styles.stats}>
-        {stats.map((stat) => (
+        {agentStats(data?.stats ?? null).map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
       </div>
@@ -146,49 +166,48 @@ export function AgentPage({ role }: { role: RoleDefinition }) {
             />
           </div>
           <div className={styles.actions}>
-            <Button variant="quiet" size="xs" icon={<ExportIcon size={12} />}>
-              Export
-            </Button>
-            <Button
-              variant="primary"
-              size="xs"
-              icon={<PlusIcon size={12} />}
-              onClick={() => setCreating(true)}
-            >
-              Create Agent
-            </Button>
+            {abilities.create ? (
+              <Button variant="primary" size="xs" icon={<PlusIcon size={12} />} onClick={() => setForm('new')}>
+                Create Agent
+              </Button>
+            ) : null}
           </div>
         </div>
+
+        {error || actionError ? <p className={styles.muted}>{error ?? actionError}</p> : null}
 
         <div className={styles.table}>
           <DataTable
             columns={columns}
-            rows={visible}
-            rowKey={(row) => row.id}
+            rows={rows}
+            rowKey={(row) => row._id}
             size="lg"
-            emptyMessage="No agents match this filter."
+            emptyMessage={loading ? 'Loading…' : 'No agents match this filter.'}
           />
         </div>
 
         <Pagination
-          page={page}
-          pageCount={Math.max(1, Math.ceil(total / 10))}
-          summary={`Showing ${visible.length} of ${total} agents`}
+          page={Math.min(page, pageCount)}
+          pageCount={pageCount}
+          summary={`Showing ${rows.length} of ${data?.total ?? 0} agents`}
           onChange={setPage}
         />
       </section>
 
-      {creating ? (
-        <CreateAgentModal
-          onClose={() => setCreating(false)}
-          onCreate={(row) => {
-            setCreated((list) => [row, ...list]);
-            setCreating(false);
+      {form ? (
+        <StaffFormModal
+          role="agent"
+          account={form === 'new' ? null : form}
+          parents={data?.parentOptions ?? []}
+          onClose={() => setForm(null)}
+          onSaved={() => {
+            setForm(null);
+            reload();
           }}
         />
       ) : null}
 
-      {open ? <AgentDrawer agent={open} onClose={() => setOpen(null)} /> : null}
+      {openId ? <AgentDrawer accountId={openId} onChanged={reload} onClose={() => setOpenId(null)} /> : null}
     </div>
   );
 }

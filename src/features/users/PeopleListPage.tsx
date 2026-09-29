@@ -1,13 +1,6 @@
-import { useMemo, useState } from 'react';
-import {
-  BanIcon,
-  CheckCircleIcon,
-  ExportIcon,
-  EyeIcon,
-  FilterIcon,
-  PencilIcon,
-  PlusIcon,
-} from '../../components/icons';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { BanIcon, CheckCircleIcon, EyeIcon, PencilIcon, PlusIcon } from '../../components/icons';
 import { Badge } from '../../components/ui/Badge/Badge';
 import { Button } from '../../components/ui/Button/Button';
 import { Checkbox } from '../../components/ui/Checkbox/Checkbox';
@@ -19,68 +12,78 @@ import { SearchInput } from '../../components/ui/SearchInput/SearchInput';
 import { StatCard } from '../../components/ui/StatCard/StatCard';
 import { Tabs } from '../../components/ui/Tabs/Tabs';
 import type { RoleDefinition } from '../../config/roles';
+import { displayName } from '../../lib/api/network';
+import type { NetworkAccount, NetworkRow } from '../../lib/api/network';
+import { formatRupees, formatRelativeTime } from '../../lib/format';
 import { AddUserModal } from './AddUserModal';
 import { UserDrawer } from './UserDrawer';
 import {
   KYC_TONE,
   RISK_TONE,
   STATUS_TONE,
-  getPeopleView,
+  peopleStats,
   showsAgentColumn,
   showsLastLogin,
+  statusLabel,
 } from './usersData';
-import type { Person } from './usersData';
+import { useNetworkList, useStatusToggle } from './useNetworkList';
 import styles from './PeopleListPage.module.css';
 
-const FILTERS = ['All', 'Active', 'Suspended', 'Inactive'] as const;
+/** 'KYC Pending' lists players whose submitted documents are waiting for review. */
+const FILTERS = ['All', 'Active', 'Suspended', 'KYC Pending'] as const;
 type Filter = (typeof FILTERS)[number];
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 
 /**
- * The list screen from node 79:3065. It backs "Users" for every role and the
- * downline segments (Franchise / Super Agent / Agent) with the same chrome.
+ * The list screen from node 79:3065 — "Users" for every role, scoped by the
+ * backend to the signed-in account's own downline.
  */
-export function PeopleListPage({ role, segment, title }: { role: RoleDefinition; segment: string; title: string }) {
-  const { people, stats, noun } = useMemo(() => getPeopleView(role, segment), [role, segment]);
-  /** Franchise and Super Agent also see who owns each user; every downline panel sees recency. */
-  const isUsers = segment === 'users';
-  const withAgent = isUsers && showsAgentColumn(role);
-  const withLastLogin = isUsers && showsLastLogin(role);
+export function PeopleListPage({ role, title }: { role: RoleDefinition; title: string }) {
+  const withAgent = showsAgentColumn(role);
+  const withLastLogin = showsLastLogin(role);
+  const noun = title.toLowerCase();
+  const singular = title.replace(/s$/, '');
 
-  const [filter, setFilter] = useState<Filter>('All');
-  const [query, setQuery] = useState('');
+  // The topbar's search and the bell's links open this page with `?q=` / `?filter=kyc`.
+  const [params] = useSearchParams();
+  const linkedQuery = params.get('q') ?? '';
+  const linkedFilter: Filter = params.get('filter') === 'kyc' ? 'KYC Pending' : 'All';
+  const [filter, setFilter] = useState<Filter>(linkedFilter);
+  const [query, setQuery] = useState(linkedQuery);
   const [page, setPage] = useState(1);
+
+  // A new link while the page is already open (searching again from the topbar).
+  useEffect(() => {
+    setQuery(linkedQuery);
+    setFilter(linkedFilter);
+    setPage(1);
+  }, [linkedQuery, linkedFilter]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [openPerson, setOpenPerson] = useState<Person | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [created, setCreated] = useState<Person[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  /** null = closed, 'new' = Add, an account = Edit. */
+  const [form, setForm] = useState<NetworkAccount | 'new' | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const all = useMemo(() => [...created, ...people], [created, people]);
+  const { data, loading, error, reload } = useNetworkList({
+    role: 'player',
+    status: filter === 'Active' ? 'active' : filter === 'Suspended' ? 'suspended' : undefined,
+    kyc: filter === 'KYC Pending' ? 'Pending' : undefined,
+    q: query,
+    page,
+    limit: PAGE_SIZE,
+  });
+  const { busyId, toggle } = useStatusToggle(reload, setActionError);
 
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return all.filter((person) => {
-      const matchesFilter = filter === 'All' || person.status === filter;
-      const matchesQuery =
-        !needle ||
-        person.name.toLowerCase().includes(needle) ||
-        person.id.toLowerCase().includes(needle) ||
-        person.email.toLowerCase().includes(needle);
-      return matchesFilter && matchesQuery;
-    });
-  }, [all, filter, query]);
+  const rows = data?.items ?? [];
+  const abilities = data?.abilities ?? { create: false, edit: false, suspend: false };
+  const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const current = Math.min(page, pageCount);
-  const visible = filtered.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
-
-  const toggle = (id: string) =>
+  const toggleOne = (id: string) =>
     setSelected((ids) => (ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id]));
+  const allVisibleSelected = rows.length > 0 && rows.every((row) => selected.includes(row._id));
 
-  const allVisibleSelected = visible.length > 0 && visible.every((person) => selected.includes(person.id));
-
-  const columns: Column<Person>[] = [
+  const columns: Column<NetworkRow>[] = [
     {
       key: 'select',
       width: 44,
@@ -89,90 +92,111 @@ export function PeopleListPage({ role, segment, title }: { role: RoleDefinition;
           label=""
           aria-label={`Select all ${noun} on this page`}
           checked={allVisibleSelected}
-          onChange={(event) =>
-            setSelected(event.target.checked ? visible.map((person) => person.id) : [])
-          }
+          onChange={(event) => setSelected(event.target.checked ? rows.map((row) => row._id) : [])}
         />
       ),
-      render: (person) => (
+      render: (row) => (
         <Checkbox
           label=""
-          aria-label={`Select ${person.name}`}
-          checked={selected.includes(person.id)}
-          onChange={() => toggle(person.id)}
+          aria-label={`Select ${row.name || row.username}`}
+          checked={selected.includes(row._id)}
+          onChange={() => toggleOne(row._id)}
         />
       ),
     },
-    { key: 'id', header: 'User ID', render: (person) => <span className={styles.id}>{person.id}</span> },
+    { key: 'id', header: 'User ID', render: (row) => <span className={styles.id}>{row.username}</span> },
     {
       key: 'name',
       header: 'Name',
-      render: (person) => (
+      render: (row) => (
         <div className={styles.identityCell}>
-          <p className={styles.name}>{person.name}</p>
-          <p className={styles.email}>{person.email}</p>
+          <p className={styles.name}>{row.name || row.username}</p>
+          <p className={styles.email}>{row.email || '—'}</p>
         </div>
       ),
     },
-    { key: 'phone', header: 'Phone', render: (person) => <span className={styles.phone}>{person.phone}</span> },
+    { key: 'phone', header: 'Phone', render: (row) => <span className={styles.phone}>{row.phone || '—'}</span> },
     ...(withAgent
       ? [
           {
             key: 'agent',
             header: 'Agent',
-            render: (person: Person) => <span className={styles.agent}>{person.agent ?? '—'}</span>,
+            render: (row: NetworkRow) => <span className={styles.agent}>{displayName(row.parent)}</span>,
           },
         ]
       : []),
-    { key: 'balance', header: 'Balance', render: (person) => <span className={styles.balance}>{person.balance}</span> },
-    { key: 'bets', header: 'Total Bets', render: (person) => person.totalBets },
+    {
+      key: 'balance',
+      header: 'Balance',
+      render: (row) => <span className={styles.balance}>{formatRupees(row.walletBalance)}</span>,
+    },
+    { key: 'bets', header: 'Total Bets', render: (row) => row.summary.bets },
     ...(withLastLogin
       ? [
           {
             key: 'lastLogin',
             header: 'Last Login',
-            render: (person: Person) => (
-              <span className={styles.lastLogin}>{person.lastLogin ?? '—'}</span>
+            render: (row: NetworkRow) => (
+              <span className={styles.lastLogin}>{row.lastLoginAt ? formatRelativeTime(row.lastLoginAt) : 'Never'}</span>
             ),
           },
         ]
       : []),
-    { key: 'kyc', header: 'KYC', render: (person) => <Badge tone={KYC_TONE[person.kyc]}>{person.kyc}</Badge> },
+    { key: 'kyc', header: 'KYC', render: (row) => <Badge tone={KYC_TONE[row.kyc]}>{row.kyc}</Badge> },
     {
       key: 'status',
       header: 'Status',
-      render: (person) => <Badge tone={STATUS_TONE[person.status]}>{person.status}</Badge>,
+      render: (row) => <Badge tone={STATUS_TONE[statusLabel(row)]}>{statusLabel(row)}</Badge>,
     },
     {
       key: 'risk',
       header: 'Risk',
-      render: (person) => (
-        <Badge tone={RISK_TONE[person.risk]} bare>
-          {person.risk}
+      render: (row) => (
+        <Badge tone={RISK_TONE[row.summary.risk]} bare>
+          {row.summary.risk}
         </Badge>
       ),
     },
     {
       key: 'actions',
       header: 'Actions',
-      render: (person) => (
-        <div className={styles.rowActions}>
-          <IconButton icon={EyeIcon} label={`View ${person.name}`} onClick={() => setOpenPerson(person)} />
-          <IconButton icon={PencilIcon} tone="warning" label={`Edit ${person.name}`} />
-          {person.status === 'Suspended' ? (
-            <IconButton icon={CheckCircleIcon} tone="success" label={`Reactivate ${person.name}`} />
-          ) : (
-            <IconButton icon={BanIcon} tone="danger" label={`Suspend ${person.name}`} />
-          )}
-        </div>
-      ),
+      render: (row) => {
+        const name = row.name || row.username;
+        return (
+          <div className={styles.rowActions}>
+            <IconButton icon={EyeIcon} label={`View ${name}`} onClick={() => setOpenId(row._id)} />
+            {abilities.edit ? (
+              <IconButton icon={PencilIcon} tone="warning" label={`Edit ${name}`} onClick={() => setForm(row)} />
+            ) : null}
+            {abilities.suspend ? (
+              row.status === 'suspended' ? (
+                <IconButton
+                  icon={CheckCircleIcon}
+                  tone="success"
+                  label={`Reactivate ${name}`}
+                  disabled={busyId === row._id}
+                  onClick={() => toggle(row._id, 'active')}
+                />
+              ) : (
+                <IconButton
+                  icon={BanIcon}
+                  tone="danger"
+                  label={`Suspend ${name}`}
+                  disabled={busyId === row._id}
+                  onClick={() => toggle(row._id, 'suspended')}
+                />
+              )
+            ) : null}
+          </div>
+        );
+      },
     },
   ];
 
   return (
     <div className={styles.page}>
       <div className={styles.stats}>
-        {stats.map((stat) => (
+        {peopleStats(data?.stats ?? null, title).map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
       </div>
@@ -202,49 +226,50 @@ export function PeopleListPage({ role, segment, title }: { role: RoleDefinition;
             />
           </div>
           <div className={styles.actions}>
-            <Button variant="quiet" size="xs" icon={<FilterIcon size={12} />}>
-              Filter
-            </Button>
-            <Button variant="quiet" size="xs" icon={<ExportIcon size={12} />}>
-              Export
-            </Button>
-            <Button variant="primary" size="xs" icon={<PlusIcon size={12} />} onClick={() => setAdding(true)}>
-              Add {title.replace(/s$/, '')}
-            </Button>
+            {abilities.create ? (
+              <Button variant="primary" size="xs" icon={<PlusIcon size={12} />} onClick={() => setForm('new')}>
+                Add {singular}
+              </Button>
+            ) : null}
           </div>
         </div>
+
+        {error || actionError ? <p className={styles.email}>{error ?? actionError}</p> : null}
 
         <div className={styles.table}>
           <DataTable
             columns={columns}
-            rows={visible}
-            rowKey={(person) => person.id}
-            emptyMessage={`No ${noun} match this filter.`}
+            rows={rows}
+            rowKey={(row) => row._id}
+            emptyMessage={loading ? 'Loading…' : `No ${noun} match this filter.`}
           />
         </div>
 
         <Pagination
-          page={current}
+          page={Math.min(page, pageCount)}
           pageCount={pageCount}
-          summary={`Showing ${visible.length} of ${filtered.length} ${noun}`}
+          summary={`Showing ${rows.length} of ${data?.total ?? 0} ${noun}`}
           onChange={setPage}
         />
       </section>
 
-      {adding ? (
+      {form ? (
         <AddUserModal
-          title={title.replace(/s$/, '')}
-          onClose={() => setAdding(false)}
-          onCreate={(person) => {
-            setCreated((list) => [person, ...list]);
-            setAdding(false);
-            setPage(1);
+          title={singular}
+          account={form === 'new' ? null : form}
+          agents={data?.parentOptions ?? []}
+          agentOptional={role.id === 'super-admin'}
+          canSetKyc={abilities.edit}
+          onClose={() => setForm(null)}
+          onSaved={() => {
+            setForm(null);
+            reload();
           }}
         />
       ) : null}
 
-      {openPerson ? (
-        <UserDrawer person={openPerson} showAgent={withAgent} onClose={() => setOpenPerson(null)} />
+      {openId ? (
+        <UserDrawer accountId={openId} showAgent={withAgent} onChanged={reload} onClose={() => setOpenId(null)} />
       ) : null}
     </div>
   );

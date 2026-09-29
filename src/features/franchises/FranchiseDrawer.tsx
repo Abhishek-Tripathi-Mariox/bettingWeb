@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import {
   BanIcon,
@@ -19,44 +19,81 @@ import { Button } from '../../components/ui/Button/Button';
 import { Drawer } from '../../components/ui/Drawer/Drawer';
 import { MetricTile } from '../../components/ui/MetricTile/MetricTile';
 import { Tabs } from '../../components/ui/Tabs/Tabs';
+import { SelectField } from '../../components/ui/TextField/SelectField';
 import { TextField } from '../../components/ui/TextField/TextField';
-import {
-  FRANCHISE_STATUS_TONE,
-  getFranchiseSettings,
-  getFranchiseWallet,
-  getSuperAgents,
-} from './franchisesData';
-import type { Franchise, SuperAgent } from './franchisesData';
+import { useAuth } from '../auth/authContext';
+import { ApiRequestError } from '../../lib/api';
+import { networkApi } from '../../lib/api/network';
+import type { NetworkDetail, SettlementCycle } from '../../lib/api/network';
+import { formatCount, formatMoney, formatRupees, formatRelativeTime } from '../../lib/format';
+import { StaffFormModal } from '../superAgents/StaffFormModal';
+import { statusLabel } from '../users/usersData';
+import { useNetworkDetail } from '../users/useNetworkList';
+import { FRANCHISE_STATUS_TONE, formatJoined, formatLocation, toNetworkPerson } from './franchisesData';
 import { NetworkRow, NetworkSection, SummaryRow } from './NetworkRows';
 import { SuperAgentDrawer } from './SuperAgentDrawer';
 import styles from './FranchiseDrawer.module.css';
+
+const SETTLEMENT_CYCLES: SettlementCycle[] = ['Daily', 'Weekly', 'Monthly'];
+
+const errorMessage = (err: unknown) =>
+  err instanceof ApiRequestError ? err.message : 'Unable to reach the server.';
 
 /**
  * Franchise record sheet — node 114:13787 (overview) plus the Super Agents,
  * Wallet and Settings tabs (nodes 116:15541, 116:16345, 116:17152).
  */
 export function FranchiseDrawer({
-  franchise,
+  accountId,
+  onChanged,
   onClose,
 }: {
-  franchise: Franchise;
+  accountId: string;
+  onChanged?: () => void;
   onClose: () => void;
 }) {
-  const superAgents = useMemo(() => getSuperAgents(franchise), [franchise]);
-  const tabs = [
-    'Overview',
-    `Super Agents (${superAgents.length})`,
-    'Wallet',
-    'Settings',
-  ] as const;
+  const { accessToken } = useAuth();
+  const { detail, error, setError, reload } = useNetworkDetail(accountId);
+  const [tab, setTab] = useState('Overview');
+  const [openAgent, setOpenAgent] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [pending, setPending] = useState(false);
 
-  const [tab, setTab] = useState<string>(tabs[0]);
-  const [openAgent, setOpenAgent] = useState<SuperAgent | null>(null);
+  if (!detail) {
+    return (
+      <Drawer label="Franchise details" width={600} onClose={onClose} header={<p className={styles.name}>Franchise</p>}>
+        <p className={styles.placeholder}>{error ?? 'Loading…'}</p>
+      </Drawer>
+    );
+  }
+
+  const { account, abilities, downline } = detail;
+  const title = account.businessName || account.name || account.username;
+  const status = statusLabel(account);
+  const tabs = ['Overview', `Super Agents (${downline.superAgents.total})`, 'Wallet', 'Settings'] as const;
+
+  const changed = async () => {
+    await reload();
+    onChanged?.();
+  };
+
+  const toggleStatus = async () => {
+    if (!accessToken) return;
+    setPending(true);
+    try {
+      await networkApi.setStatus(account._id, account.status === 'suspended' ? 'active' : 'suspended', accessToken);
+      await changed();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setPending(false);
+    }
+  };
 
   return (
     <>
       <Drawer
-        label={`${franchise.name} details`}
+        label={`${title} details`}
         width={600}
         onClose={onClose}
         header={
@@ -65,111 +102,96 @@ export function FranchiseDrawer({
               <BuildingIcon size={21.996} />
             </span>
             <div>
-              <p className={styles.name}>{franchise.name}</p>
+              <p className={styles.name}>{title}</p>
               <div className={styles.meta}>
-                <span className={styles.code}>{franchise.code}</span>
-                <Badge tone={FRANCHISE_STATUS_TONE[franchise.status]}>{franchise.status}</Badge>
+                <span className={styles.code}>{account.username}</span>
+                <Badge tone={FRANCHISE_STATUS_TONE[status]}>{status}</Badge>
               </div>
             </div>
           </div>
         }
         actions={
-          <>
-            <Button variant="primary" size="xs" icon={<PencilIcon size={12} />}>
-              Edit
-            </Button>
-            <Button className={styles.block} size="xs" icon={<BanIcon size={12} />}>
-              Block
-            </Button>
-          </>
+          abilities.edit || abilities.suspend ? (
+            <>
+              {abilities.edit ? (
+                <Button variant="primary" size="xs" icon={<PencilIcon size={12} />} onClick={() => setEditing(true)}>
+                  Edit
+                </Button>
+              ) : null}
+              {abilities.suspend ? (
+                <Button
+                  className={account.status === 'active' ? styles.block : undefined}
+                  size="xs"
+                  disabled={pending}
+                  icon={account.status === 'active' ? <BanIcon size={12} /> : <CheckCircleIcon size={12} />}
+                  onClick={toggleStatus}
+                >
+                  {account.status === 'active' ? 'Block' : 'Reactivate'}
+                </Button>
+              ) : null}
+            </>
+          ) : undefined
         }
-        tabs={
-          <Tabs
-            items={tabs}
-            value={tab}
-            variant="underline"
-            aria-label="Franchise sections"
-            onChange={setTab}
-          />
-        }
+        tabs={<Tabs items={tabs} value={tab} variant="underline" aria-label="Franchise sections" onChange={setTab} />}
       >
-        {tab === 'Overview' ? (
-          <OverviewTab
-            franchise={franchise}
-            superAgentCount={superAgents.length}
-            onViewSuperAgents={() => setTab(tabs[1])}
-          />
-        ) : null}
+        {error ? <p className={styles.placeholder}>{error}</p> : null}
+
+        {tab === 'Overview' ? <OverviewTab detail={detail} onViewSuperAgents={() => setTab(tabs[1])} /> : null}
 
         {tab === tabs[1] ? (
-          <NetworkSection
-            title={`Super Agents under ${franchise.name}`}
-            count={`${superAgents.length} super agents`}
-          >
-            {superAgents.map((superAgent) => (
-              <NetworkRow
-                key={superAgent.id}
-                person={superAgent}
-                onOpen={() => setOpenAgent(superAgent)}
-              />
+          <NetworkSection title={`Super Agents under ${title}`} count={`${downline.superAgents.total} super agents`}>
+            {downline.superAgents.items.length === 0 ? <p className={styles.placeholder}>No super agents yet.</p> : null}
+            {downline.superAgents.items.map((row, index) => (
+              <NetworkRow key={row._id} person={toNetworkPerson(row, index)} onOpen={() => setOpenAgent(row._id)} />
             ))}
           </NetworkSection>
         ) : null}
 
-        {tab === 'Wallet' ? <WalletTab franchise={franchise} /> : null}
-        {tab === 'Settings' ? <SettingsTab franchise={franchise} /> : null}
+        {tab === 'Wallet' ? <WalletTab detail={detail} onAdjust={abilities.edit ? () => setTab('Settings') : undefined} /> : null}
+        {tab === 'Settings' ? <SettingsTab key={account.updatedAt} detail={detail} onSaved={changed} /> : null}
+
+        {editing ? (
+          <StaffFormModal
+            role="franchise"
+            account={account}
+            parents={[]}
+            onClose={() => setEditing(false)}
+            onSaved={() => {
+              setEditing(false);
+              void changed();
+            }}
+          />
+        ) : null}
       </Drawer>
 
       {openAgent ? (
-        <SuperAgentDrawer
-          superAgent={openAgent}
-          parentLabel="Franchise"
-          onClose={() => setOpenAgent(null)}
-        />
+        <SuperAgentDrawer accountId={openAgent} parentLabel={title} onChanged={changed} onClose={() => setOpenAgent(null)} />
       ) : null}
     </>
   );
 }
 
-function OverviewTab({
-  franchise,
-  superAgentCount,
-  onViewSuperAgents,
-}: {
-  franchise: Franchise;
-  superAgentCount: number;
-  onViewSuperAgents: () => void;
-}) {
+function OverviewTab({ detail, onViewSuperAgents }: { detail: NetworkDetail; onViewSuperAgents: () => void }) {
+  const { account, summary, downline } = detail;
+
   return (
     <div className={styles.body}>
       <div className={styles.metrics}>
-        <MetricTile
-          label="Super Agents"
-          value={String(superAgentCount)}
-          color="var(--color-primary)"
-        />
-        <MetricTile
-          label="Total Agents"
-          value={String(franchise.agents)}
-          color="var(--color-primary-light)"
-        />
-        <MetricTile label="Total Users" value={franchise.users} color="var(--color-success)" />
-        <MetricTile label="Revenue" value={franchise.revenue} color="var(--color-warning)" />
-        <MetricTile
-          label="Credit Limit"
-          value={franchise.credit}
-          color="var(--color-primary-light)"
-        />
-        <MetricTile label="Exposure" value={franchise.exposure} color="var(--color-live)" />
+        <MetricTile label="Super Agents" value={formatCount(downline.superAgents.total)} color="var(--color-primary)" />
+        <MetricTile label="Total Agents" value={formatCount(downline.agents.total)} color="var(--color-primary-light)" />
+        <MetricTile label="Total Users" value={formatCount(downline.players.total)} color="var(--color-success)" />
+        <MetricTile label="Turnover" value={formatMoney(summary.turnover)} color="var(--color-warning)" />
+        <MetricTile label="Credit Limit" value={formatRupees(account.creditLimit)} color="var(--color-primary-light)" />
+        <MetricTile label="Exposure" value={formatMoney(summary.exposure)} color="var(--color-live)" />
       </div>
 
       <div className={styles.panel}>
         <p className={styles.panelTitle}>Contact Information</p>
-        <Row icon={<UserIcon size={12.992} />} label="Owner" value={franchise.owner} />
-        <Row icon={<PhoneIcon size={12.992} />} label="Phone" value={franchise.phone} />
-        <Row icon={<MailIcon size={12.992} />} label="Email" value={franchise.email} />
-        <Row icon={<MapPinIcon size={12.992} />} label="Location" value={franchise.location} />
-        <Row icon={<CalendarIcon size={12.992} />} label="Joined" value={franchise.joined} />
+        <Row icon={<UserIcon size={12.992} />} label="Owner" value={account.name || '—'} />
+        <Row icon={<PhoneIcon size={12.992} />} label="Phone" value={account.phone || '—'} />
+        <Row icon={<MailIcon size={12.992} />} label="Email" value={account.email || '—'} />
+        <Row icon={<MapPinIcon size={12.992} />} label="Location" value={formatLocation(account)} />
+        <Row icon={<CalendarIcon size={12.992} />} label="Joined" value={formatJoined(account.createdAt)} />
       </div>
 
       <Button
@@ -180,34 +202,55 @@ function OverviewTab({
         icon={<UsersCogIcon size={12.992} />}
         onClick={onViewSuperAgents}
       >
-        View {superAgentCount} Super Agents
+        View {downline.superAgents.total} Super Agents
       </Button>
     </div>
   );
 }
 
-function WalletTab({ franchise }: { franchise: Franchise }) {
-  const wallet = getFranchiseWallet(franchise);
+function WalletTab({ detail, onAdjust }: { detail: NetworkDetail; onAdjust?: () => void }) {
+  const [showTxns, setShowTxns] = useState(false);
+  const { account, summary, wallet, transactions } = detail;
 
   return (
     <div className={styles.body}>
       <div className={styles.walletTiles}>
-        <WalletTile label="Credit Balance" value={wallet.credit} rgb="34, 197, 94" />
-        <WalletTile label="Current Exposure" value={wallet.exposure} rgb="255, 46, 99" />
+        <WalletTile label="Credit Limit" value={formatRupees(account.creditLimit)} rgb="34, 197, 94" />
+        <WalletTile label="Current Exposure" value={formatMoney(summary.exposure)} rgb="255, 46, 99" />
       </div>
 
       <div className={styles.walletActions}>
-        <Button variant="primary" size="sm" icon={<WalletIcon size={13} />}>
-          Adjust Credit
-        </Button>
-        <Button variant="outline" size="sm" icon={<TransactionsIcon size={13} />}>
-          View Txns
+        {onAdjust ? (
+          <Button variant="primary" size="sm" icon={<WalletIcon size={13} />} onClick={onAdjust}>
+            Adjust Credit
+          </Button>
+        ) : null}
+        <Button variant="outline" size="sm" icon={<TransactionsIcon size={13} />} onClick={() => setShowTxns((value) => !value)}>
+          {showTxns ? 'Hide Txns' : 'View Txns'}
         </Button>
       </div>
 
-      {wallet.rows.map((row) => (
-        <SummaryRow key={row.label} stat={row} />
-      ))}
+      <SummaryRow stat={{ label: 'Turnover This Month', value: formatMoney(summary.monthTurnover), color: 'var(--color-success)' }} />
+      <SummaryRow stat={{ label: 'Commission Earned', value: formatMoney(wallet.commissionEarned), color: 'var(--color-warning)' }} />
+      <SummaryRow stat={{ label: 'Net User Deposits', value: formatMoney(wallet.deposited - wallet.withdrawn), color: 'var(--color-primary)' }} />
+
+      {showTxns ? (
+        transactions.length === 0 ? (
+          <p className={styles.placeholder}>No transactions in this network yet.</p>
+        ) : (
+          transactions.map((txn) => (
+            <SummaryRow
+              key={txn._id}
+              stat={{
+                label: `${txn.type} · ${!txn.user ? 'Platform' : typeof txn.user === 'string' ? txn.user.slice(-6) : txn.user.name || txn.user.username}`,
+                value: `${txn.amount >= 0 ? '+' : '-'}${formatRupees(Math.abs(txn.amount))}`,
+                color: txn.amount >= 0 ? 'var(--color-success)' : 'var(--color-danger)',
+              }}
+              delta={formatRelativeTime(txn.createdAt)}
+            />
+          ))
+        )
+      ) : null}
     </div>
   );
 }
@@ -230,41 +273,117 @@ function WalletTile({ label, value, rgb }: { label: string; value: string; rgb: 
   );
 }
 
-function SettingsTab({ franchise }: { franchise: Franchise }) {
-  const initial = getFranchiseSettings(franchise);
-  const [form, setForm] = useState(initial);
-  const set = (key: keyof typeof initial) => (value: string) =>
-    setForm((current) => ({ ...current, [key]: value }));
+const numberOrEmpty = (value: number | null) => (value === null || value === 0 ? '' : String(value));
+
+function SettingsTab({ detail, onSaved }: { detail: NetworkDetail; onSaved: () => Promise<void> }) {
+  const { accessToken } = useAuth();
+  const { account, abilities } = detail;
+  const [form, setForm] = useState({
+    commissionRate: account.commissionRate === null ? '' : String(account.commissionRate),
+    creditLimit: numberOrEmpty(account.creditLimit),
+    bettingLimit: numberOrEmpty(account.bettingLimit),
+    maxExposure: numberOrEmpty(account.maxExposure),
+    settlementCycle: account.settlementCycle,
+  });
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const set = (key: keyof typeof form) => (value: string) => setForm((current) => ({ ...current, [key]: value }));
+
+  const save = async () => {
+    if (!accessToken) return;
+    const amount = (label: string, raw: string) => {
+      if (raw.trim() === '') return 0;
+      const value = Number(raw);
+      if (Number.isNaN(value) || value < 0) throw new Error(`${label} must be a positive number.`);
+      return value;
+    };
+    setPending(true);
+    setMessage(null);
+    try {
+      const rate = form.commissionRate.trim() === '' ? null : Number(form.commissionRate);
+      if (rate !== null && (Number.isNaN(rate) || rate < 0 || rate > 100)) throw new Error('Commission must be 0–100%.');
+      await networkApi.update(
+        account._id,
+        {
+          commissionRate: rate,
+          creditLimit: amount('Credit limit', form.creditLimit),
+          bettingLimit: amount('Betting limit', form.bettingLimit),
+          maxExposure: amount('Max exposure', form.maxExposure),
+          settlementCycle: form.settlementCycle,
+        },
+        accessToken,
+      );
+      await onSaved();
+      setMessage('Saved.');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : errorMessage(err));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const readOnly = !abilities.edit;
 
   return (
     <div className={styles.settings}>
       <TextField
         label="Commission Percentage"
         labelCase="caps"
-        value={form.commissionPercentage}
-        onChange={(event) => set('commissionPercentage')(event.target.value)}
+        inputMode="decimal"
+        placeholder="Platform default"
+        readOnly={readOnly}
+        value={form.commissionRate}
+        onChange={(event) => set('commissionRate')(event.target.value)}
       />
       <TextField
-        label="Betting Limit per User"
+        label="Credit Limit (₹)"
         labelCase="caps"
+        inputMode="numeric"
+        placeholder="0"
+        readOnly={readOnly}
+        value={form.creditLimit}
+        onChange={(event) => set('creditLimit')(event.target.value)}
+      />
+      <TextField
+        label="Betting Limit per User (₹)"
+        labelCase="caps"
+        inputMode="numeric"
+        placeholder="Platform default"
+        readOnly={readOnly}
         value={form.bettingLimit}
         onChange={(event) => set('bettingLimit')(event.target.value)}
       />
       <TextField
-        label="Max Exposure Limit"
+        label="Max Exposure Limit (₹)"
         labelCase="caps"
+        inputMode="numeric"
+        placeholder="Platform default"
+        readOnly={readOnly}
         value={form.maxExposure}
         onChange={(event) => set('maxExposure')(event.target.value)}
       />
-      <TextField
+      <SelectField
         label="Settlement Cycle"
-        labelCase="caps"
+        options={SETTLEMENT_CYCLES}
+        placeholder={null}
+        disabled={readOnly}
         value={form.settlementCycle}
         onChange={(event) => set('settlementCycle')(event.target.value)}
       />
-      <Button className={styles.save} variant="primary" size="sm" icon={<CheckCircleIcon size={13} />}>
-        Save Settings
-      </Button>
+      {message ? <p className={styles.placeholder}>{message}</p> : null}
+      {readOnly ? null : (
+        <Button
+          className={styles.save}
+          variant="primary"
+          size="sm"
+          disabled={pending}
+          icon={<CheckCircleIcon size={13} />}
+          onClick={save}
+        >
+          {pending ? 'Saving…' : 'Save Settings'}
+        </Button>
+      )}
     </div>
   );
 }

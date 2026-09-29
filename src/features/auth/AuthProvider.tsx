@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { RoleId } from '../../config/roles';
-import { ApiRequestError, authApi } from '../../lib/api';
+import { ApiRequestError, authApi, bindSession, setSessionListener } from '../../lib/api';
 import { AuthContext } from './authContext';
 import type { AuthUser, Credentials } from './authContext';
 
@@ -49,7 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async ({ roleId, username, password, remember }: Credentials) => {
     try {
       const session = await authApi.login({ username, password, roleId });
-      const nextUser: AuthUser = { username: session.user.username, roleId: session.user.role as RoleId };
+      const nextUser: AuthUser = {
+        username: session.user.username,
+        roleId: session.user.role as RoleId,
+        name: session.user.name,
+      };
 
       setUser(nextUser);
       setAccessToken(session.accessToken);
@@ -89,38 +93,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [remembered, user],
   );
 
+  // Keeps the API client's token pair in step with the session, and follows
+  // the refreshes it does by itself when an access token expires mid-session.
+  useEffect(() => {
+    bindSession(accessToken && refreshToken ? { accessToken, refreshToken } : null);
+  }, [accessToken, refreshToken]);
+
+  useEffect(() => {
+    setSessionListener({
+      onRotate: (tokens) => setTokens(tokens.accessToken, tokens.refreshToken),
+      onExpire: () => {
+        setUser(null);
+        setAccessToken(null);
+        setRefreshToken(null);
+        writeStoredSession(null);
+      },
+    });
+    return () => setSessionListener(null);
+  }, [setTokens]);
+
   // Confirms a session restored from localStorage is still valid (not
-  // suspended, not deleted, token not expired) rather than trusting it blindly.
+  // suspended, not deleted) rather than trusting it blindly. An expired
+  // access token is refreshed by the API client itself (see lib/api.ts), so
+  // only a rejected session signs the user out — a network blip doesn't.
   useEffect(() => {
     if (!initial) return;
 
     authApi
       .me(initial.accessToken)
-      .catch(async () => {
-        try {
-          const rotated = await authApi.refresh(initial.refreshToken);
-          const refreshed = await authApi.me(rotated.accessToken);
-          setAccessToken(rotated.accessToken);
-          setRefreshToken(rotated.refreshToken);
-          writeStoredSession({
-            user: { username: refreshed.user.username, roleId: refreshed.user.role as RoleId },
-            accessToken: rotated.accessToken,
-            refreshToken: rotated.refreshToken,
-          });
-        } catch {
-          setUser(null);
-          setAccessToken(null);
-          setRefreshToken(null);
-          writeStoredSession(null);
-        }
+      // The name may have changed (or never been stored) since this session was saved.
+      .then((res) => setUser((current) => (current ? { ...current, name: res.user.name } : current)))
+      .catch((err) => {
+        if (!(err instanceof ApiRequestError) || err.status === 0) return;
+        setUser(null);
+        setAccessToken(null);
+        setRefreshToken(null);
+        writeStoredSession(null);
       });
     // Runs once, against the session that was on disk when the provider mounted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const setDisplayName = useCallback((name: string) => {
+    setUser((current) => (current ? { ...current, name } : current));
+  }, []);
+
   const value = useMemo(
-    () => ({ user, accessToken, signIn, signOut, setTokens }),
-    [user, accessToken, signIn, signOut, setTokens],
+    () => ({ user, accessToken, signIn, signOut, setTokens, setDisplayName }),
+    [user, accessToken, signIn, signOut, setTokens, setDisplayName],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

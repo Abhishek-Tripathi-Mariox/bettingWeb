@@ -1,4 +1,4 @@
-import { API_BASE_URL, ApiRequestError, apiRequest } from '../api';
+import { API_BASE_URL, ApiRequestError, apiRequest, rotateTokens } from '../api';
 
 /** Matches backend `REPORT_KINDS` — see backend/src/services/report.service.js. */
 export type ReportKindSlug = 'financial' | 'betting' | 'user' | 'wallet' | 'commission' | 'exposure';
@@ -17,12 +17,15 @@ export type ReportDateRange = {
   /** ISO 8601 date (e.g. "2024-07-01"); omitted filters are left unbounded. */
   from?: string;
   to?: string;
+  /** Rolls dated rows up per period — 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly'. */
+  groupBy?: string;
 };
 
 function rangeQuery(range: ReportDateRange): string {
   const params = new URLSearchParams();
   if (range.from) params.set('from', range.from);
   if (range.to) params.set('to', range.to);
+  if (range.groupBy) params.set('groupBy', range.groupBy);
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }
@@ -47,13 +50,21 @@ export async function downloadReportCsv(
   range: ReportDateRange,
   accessToken: string,
 ): Promise<void> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE_URL}/reports/${kind}/export${rangeQuery(range)}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-  } catch {
-    throw new ApiRequestError(0, 'Unable to reach the server. Please check your connection.');
+  const download = async (token: string) => {
+    try {
+      return await fetch(`${API_BASE_URL}/reports/${kind}/export${rangeQuery(range)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      throw new ApiRequestError(0, 'Unable to reach the server. Please check your connection.');
+    }
+  };
+
+  let response = await download(accessToken);
+  if (response.status === 401) {
+    // Expired access token: refresh once and try again, like apiRequest does.
+    const fresh = await rotateTokens(accessToken);
+    if (fresh) response = await download(fresh);
   }
 
   if (!response.ok) {

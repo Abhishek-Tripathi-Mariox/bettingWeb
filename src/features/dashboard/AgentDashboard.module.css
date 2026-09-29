@@ -172,3 +172,47 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Per-agent breakdown on the super agent / franchise dashboard. */
+.agents {
+  overflow-x: auto;
+}
+
+.agentsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-xs);
+}
+
+.agentsTable th {
+  border-bottom: var(--border-hairline);
+  padding: 0 var(--space-5) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.agentsTable td {
+  border-bottom: var(--border-hairline);
+  padding: var(--space-5);
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.agentsTable tr:last-child td {
+  border-bottom: 0;
+}
+
+.agentName {
+  display: block;
+  font-weight: var(--font-weight-medium);
+}
+
+.agentId {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-2xs);
+}

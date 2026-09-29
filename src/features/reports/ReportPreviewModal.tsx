@@ -10,7 +10,6 @@ import {
   formatReportCell,
   formatReportColumnHeader,
   getReportColumns,
-  getReportPreview,
 } from './reportsData';
 import type { ReportKind } from './reportsData';
 import styles from './ReportPreviewModal.module.css';
@@ -20,6 +19,10 @@ export type ReportPreviewModalProps = {
   kind: ReportKind;
   /** Date range from the Reports page's builder — only used for the live (super-admin) preview. */
   range: ReportDateRange;
+  /** Whether the viewer holds the "Export Data" grant. */
+  canExport: boolean;
+  /** Opens the rows shown as a printable sheet (PDF / print). */
+  onPrint: (rows: ReportRow[]) => void;
   onClose: () => void;
 };
 
@@ -28,23 +31,20 @@ export type ReportPreviewModalProps = {
  * Modal (820px) and washed in the kind's own colour, so it carries its own
  * chrome; the table it shows travels with the kind.
  *
- * Only super-admin has a live `/reports` endpoint (this modal is shared by
- * every role's Reports page), so real data is fetched only for that role —
- * every other role keeps rendering the original sample sheet unchanged.
+ * Every role's rows are live and scoped to its own network by the backend.
  */
-export function ReportPreviewModal({ kind, range, onClose }: ReportPreviewModalProps) {
-  const { user, accessToken } = useAuth();
-  const isSuperAdmin = user?.roleId === 'super-admin';
+export function ReportPreviewModal({ kind, range, canExport, onPrint, onClose }: ReportPreviewModalProps) {
+  const { accessToken } = useAuth();
 
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [total, setTotal] = useState(0);
-  const [pending, setPending] = useState(isSuperAdmin);
+  const [pending, setPending] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isSuperAdmin || !accessToken) return;
+    if (!accessToken) return;
     let cancelled = false;
     setPending(true);
     setError(null);
@@ -67,7 +67,7 @@ export function ReportPreviewModal({ kind, range, onClose }: ReportPreviewModalP
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSuperAdmin, accessToken, kind.slug, range.from, range.to]);
+  }, [accessToken, kind.slug, range.from, range.to, range.groupBy]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -78,7 +78,7 @@ export function ReportPreviewModal({ kind, range, onClose }: ReportPreviewModalP
   }, [onClose]);
 
   const handleExport = async () => {
-    if (!isSuperAdmin || !accessToken) return;
+    if (!accessToken) return;
     setExportError(null);
     setExporting(true);
     try {
@@ -90,17 +90,15 @@ export function ReportPreviewModal({ kind, range, onClose }: ReportPreviewModalP
     }
   };
 
-  const dummy = getReportPreview(kind.title);
-  const columns = isSuperAdmin ? getReportColumns(rows) : dummy.columns;
+  const columns = getReportColumns(rows);
   const periodLabel = range.from || range.to ? `${range.from || '…'} – ${range.to || 'now'}` : 'All time';
-  const meta = isSuperAdmin
-    ? [
-        { label: 'Period', value: periodLabel },
-        { label: 'Total Records', value: pending ? '…' : String(total) },
-        { label: 'Status', value: pending ? 'Loading…' : error ? 'Error' : 'Complete' },
-        { label: 'Format', value: 'Tabular' },
-      ]
-    : dummy.meta;
+  const grouping = range.groupBy ? `Grouped ${range.groupBy.toLowerCase()}` : 'Every record';
+  const meta = [
+    { label: 'Period', value: periodLabel },
+    { label: 'Total Records', value: pending ? '…' : String(total) },
+    { label: 'Status', value: pending ? 'Loading…' : error ? 'Error' : 'Complete' },
+    { label: 'Layout', value: grouping },
+  ];
 
   return (
     <div className={styles.overlay} role="presentation" onClick={onClose}>
@@ -116,30 +114,26 @@ export function ReportPreviewModal({ kind, range, onClose }: ReportPreviewModalP
           <div>
             <h2 className={styles.title}>{kind.title} — Preview</h2>
             <p className={styles.subtitle}>
-              {isSuperAdmin ? 'Live data' : 'Generated 13 Aug 2026 · Sample data'}
+              Live data
             </p>
           </div>
           <div className={styles.actions}>
-            {isSuperAdmin ? (
-              <Button
-                variant="primary"
-                size="xs"
-                icon={<ExportIcon size={12} />}
-                disabled={!accessToken || exporting}
-                onClick={handleExport}
-              >
-                {exporting ? 'Exporting…' : 'Export CSV'}
-              </Button>
-            ) : (
+            {canExport ? (
               <>
-                <Button variant="primary" size="xs" icon={<ExportIcon size={12} />}>
-                  Export PDF
+                <Button size="xs" disabled={pending || Boolean(error)} onClick={() => onPrint(rows)}>
+                  Print / PDF
                 </Button>
-                <Button className={styles.excel} size="xs" icon={<ExportIcon size={12} />}>
-                  Export Excel
+                <Button
+                  variant="primary"
+                  size="xs"
+                  icon={<ExportIcon size={12} />}
+                  disabled={!accessToken || exporting}
+                  onClick={handleExport}
+                >
+                  {exporting ? 'Exporting…' : 'Export Excel (CSV)'}
                 </Button>
               </>
-            )}
+            ) : null}
             <button type="button" className={styles.close} aria-label="Close" onClick={onClose}>
               <CloseIcon size={14} />
             </button>
@@ -155,59 +149,43 @@ export function ReportPreviewModal({ kind, range, onClose }: ReportPreviewModalP
           ))}
         </div>
 
-        {isSuperAdmin && exportError ? (
+        {exportError ? (
           <p className={styles.subtitle} role="alert">
             {exportError}
           </p>
         ) : null}
 
         <div className={styles.body}>
-          {isSuperAdmin && pending ? (
+          {pending ? (
             <p className={styles.subtitle}>Loading…</p>
-          ) : isSuperAdmin && error ? (
+          ) : error ? (
             <p className={styles.subtitle} role="alert">
               {error}
             </p>
-          ) : isSuperAdmin && rows.length === 0 ? (
+          ) : rows.length === 0 ? (
             <p className={styles.subtitle}>No records in this range.</p>
           ) : (
             <table className={styles.table}>
               <thead>
                 <tr>
-                  {isSuperAdmin
-                    ? columns.map((head) => (
-                        <th key={head} scope="col">
-                          {formatReportColumnHeader(head)}
-                        </th>
-                      ))
-                    : columns.map((head) => (
-                        <th key={head} scope="col">
-                          {head}
-                        </th>
-                      ))}
+                  {columns.map((head) => (
+                    <th key={head} scope="col">
+                      {formatReportColumnHeader(head)}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {isSuperAdmin
-                  ? rows.map((row, rowIndex) => (
-                      // eslint-disable-next-line react/no-array-index-key
-                      <tr key={rowIndex}>
-                        {columns.map((column, index) => (
-                          <td key={column} className={index === 0 ? styles.rowHead : undefined}>
-                            {formatReportCell(row[column])}
-                          </td>
-                        ))}
-                      </tr>
-                    ))
-                  : dummy.rows.map((row) => (
-                      <tr key={row[0]}>
-                        {row.map((cell, index) => (
-                          <td key={columns[index]} className={index === 0 ? styles.rowHead : undefined}>
-                            {cell}
-                          </td>
-                        ))}
-                      </tr>
+                {rows.map((row, rowIndex) => (
+                  // eslint-disable-next-line react/no-array-index-key
+                  <tr key={rowIndex}>
+                    {columns.map((column, index) => (
+                      <td key={column} className={index === 0 ? styles.rowHead : undefined}>
+                        {formatReportCell(row[column])}
+                      </td>
                     ))}
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}

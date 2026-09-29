@@ -74,7 +74,7 @@ export function BettingPage() {
     }
   };
 
-  const handleToggleStatus = async (match: ApiMatch, status: 'Live' | 'Completed') => {
+  const handleToggleStatus = async (match: ApiMatch, status: 'Live' | 'Suspended') => {
     if (!accessToken) return;
     setSuspendingId(match._id);
     try {
@@ -189,7 +189,7 @@ export function BettingPage() {
                         className={styles.suspend}
                         size="xs"
                         icon={<BanIcon size={12} />}
-                        onClick={() => handleToggleStatus(match, 'Completed')}
+                        onClick={() => handleToggleStatus(match, 'Suspended')}
                         disabled={suspendingId === match._id}
                       >
                         Suspend

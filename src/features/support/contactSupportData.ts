@@ -8,6 +8,8 @@ export type SupportChannel = {
   /** rgb triplet the card, tile and action are tinted with. */
   rgb: string;
   action?: string;
+  /** Where the action button goes: tel:, WhatsApp, Telegram or mailto:. */
+  href?: string;
 };
 
 export type SupportWindow = { day: string; hours: string; open: boolean };
@@ -28,6 +30,7 @@ export const SUPPORT_CHANNELS: SupportChannel[] = [
     note: 'Mon–Sat, 9 AM – 9 PM IST',
     rgb: '34, 197, 94',
     action: 'Call Now',
+    href: 'tel:+919876500000',
   },
   {
     emoji: '💬',
@@ -36,6 +39,7 @@ export const SUPPORT_CHANNELS: SupportChannel[] = [
     note: 'Chat instantly on WhatsApp',
     rgb: '37, 211, 102',
     action: 'Open WhatsApp',
+    href: 'https://wa.me/919876500001',
   },
   {
     emoji: '✈️',
@@ -44,6 +48,7 @@ export const SUPPORT_CHANNELS: SupportChannel[] = [
     note: 'Fast responses via Telegram',
     rgb: '41, 182, 246',
     action: 'Open Telegram',
+    href: 'https://t.me/betmaster_support',
   },
   {
     emoji: '✉️',
@@ -52,6 +57,7 @@ export const SUPPORT_CHANNELS: SupportChannel[] = [
     note: 'Response within 2–4 hours',
     rgb: '250, 204, 21',
     action: 'Send Email',
+    href: 'mailto:support@betmaster.com',
   },
 ];
 

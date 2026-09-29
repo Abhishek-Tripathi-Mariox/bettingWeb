@@ -5,16 +5,24 @@ import { Button } from '../../components/ui/Button/Button';
 import { Modal } from '../../components/ui/Modal/Modal';
 import { SelectField } from '../../components/ui/TextField/SelectField';
 import { TextField } from '../../components/ui/TextField/TextField';
-import { PAYMENT_METHODS, PAYMENT_TYPES, RECIPIENTS, RECIPIENT_TYPES } from './walletData';
+import { PAYMENT_METHODS, PAYMENT_TYPES, RECIPIENT_TYPES } from './walletData';
 import styles from './NewPaymentModal.module.css';
+
+export type PaymentRecipientOption = { id: string; label: string; type: (typeof RECIPIENT_TYPES)[number] };
+
+export type NewPaymentSubmit = { recipientId: string; paymentType: string; method: string; amount: number; note: string };
 
 export type NewPaymentModalProps = {
   onClose: () => void;
   onConfirm: () => void;
+  /** Staff accounts that can be paid, filtered by the chosen recipient type. */
+  recipients: PaymentRecipientOption[];
+  /** The API call to run on confirm. */
+  onSubmit: (values: NewPaymentSubmit) => Promise<void>;
 };
 
 /** Pay a partner — node 119:39582. */
-export function NewPaymentModal({ onClose, onConfirm }: NewPaymentModalProps) {
+export function NewPaymentModal({ onClose, onConfirm, recipients, onSubmit }: NewPaymentModalProps) {
   const [form, setForm] = useState({
     recipientType: RECIPIENT_TYPES[0] as string,
     recipient: '',
@@ -27,9 +35,28 @@ export function NewPaymentModal({ onClose, onConfirm }: NewPaymentModalProps) {
   const set = (key: keyof typeof form) => (value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const typed = recipients.filter((recipient) => recipient.type === form.recipientType);
+  const recipientOptions = typed.map((recipient) => recipient.label);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onConfirm();
+    const recipientId = typed.find((recipient) => recipient.label === form.recipient)?.id;
+    const amount = Number(form.amount);
+    if (!recipientId) return setError('Select a recipient.');
+    if (!(amount > 0)) return setError('Enter an amount greater than zero.');
+    setPending(true);
+    setError(null);
+    try {
+      await onSubmit({ recipientId, paymentType: form.paymentType, method: form.method, amount, note: form.note.trim() });
+      onConfirm();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.');
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -46,11 +73,11 @@ export function NewPaymentModal({ onClose, onConfirm }: NewPaymentModalProps) {
             options={RECIPIENT_TYPES}
             placeholder="Super Agent"
             value={form.recipientType}
-            onChange={(event) => set('recipientType')(event.target.value)}
+            onChange={(event) => setForm((current) => ({ ...current, recipientType: event.target.value, recipient: '' }))}
           />
           <SelectField
             label="Select Recipient *"
-            options={RECIPIENTS}
+            options={recipientOptions}
             placeholder="— Select —"
             value={form.recipient}
             onChange={(event) => set('recipient')(event.target.value)}
@@ -88,15 +115,18 @@ export function NewPaymentModal({ onClose, onConfirm }: NewPaymentModalProps) {
           />
         </div>
 
+        {error ? <p role="alert">{error}</p> : null}
+
         <div className={styles.footer}>
           <Button
+            disabled={pending}
             className={styles.submit}
             type="submit"
             variant="primary"
             size="sm"
             icon={<TransactionsIcon size={13} />}
           >
-            Confirm &amp; Pay
+            {pending ? 'Paying…' : 'Confirm & Pay'}
           </Button>
           <Button className={styles.cancel} variant="outline" size="sm" onClick={onClose}>
             Cancel

@@ -144,3 +144,73 @@
     padding: 0 var(--space-6);
   }
 }
+
+/* --- Bell: the list of things waiting for this account ----------------- */
+.bell {
+  position: relative;
+  flex: none;
+}
+
+.alerts {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: 300px;
+  border: var(--border-hairline);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-header);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  padding: var(--space-3);
+}
+
+.alertsTitle {
+  margin: 0;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.alertsEmpty {
+  margin: 0;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.alert {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  padding: var(--space-3);
+  text-align: left;
+  cursor: pointer;
+}
+
+.alert:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.alertTitle {
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+.alertDetail {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-2xs);
+}
+
+button.avatar,
+button.chipRole {
+  cursor: pointer;
+}

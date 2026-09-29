@@ -1,7 +1,7 @@
 import { apiRequest } from '../api';
 import type { ApiMarket } from './markets';
 
-export type ApiEventStatus = 'Live' | 'Upcoming' | 'Completed' | 'Settled';
+export type ApiEventStatus = 'Live' | 'Upcoming' | 'Suspended' | 'Completed' | 'Settled';
 
 export type ApiEvent = {
   _id: string;
@@ -82,12 +82,11 @@ export const eventsApi = {
   create: (payload: CreateEventPayload, accessToken?: string | null) =>
     apiRequest<{ event: ApiEvent }>('/events', { method: 'POST', body: payload, accessToken }),
 
-  /**
-   * Note: `EVENT_STATUSES` (backend/src/constants/admin.js) is
-   * `['Live', 'Upcoming', 'Completed', 'Settled']` — there is no 'Suspended'
-   * event status, even though event.service.js#updateEventStatus has a
-   * dead branch checking for it. Only pass one of the four real statuses.
-   */
+  /** The score line shown to players on the match; '' clears it. */
+  updateScore: (id: string, score: string, accessToken?: string | null) =>
+    apiRequest<{ event: ApiEvent }>(`/events/${id}/score`, { method: 'PATCH', body: { score }, accessToken }),
+
+  /** Suspended/Completed/Settled also suspend the event's active markets server-side. */
   updateStatus: (id: string, status: ApiEventStatus, accessToken?: string | null) =>
     apiRequest<{ event: ApiEvent }>(`/events/${id}/status`, {
       method: 'PATCH',

@@ -20,6 +20,11 @@ export function formatMoneyExact(value: number): string {
   return `${sign}₹${INDIAN.format(Math.abs(Math.round(value)))}`;
 }
 
+/** ₹ with full digits and no "+" — balances, limits, stakes. Negative values keep their "-". */
+export function formatRupees(value: number): string {
+  return `${value < 0 ? '-' : ''}₹${INDIAN.format(Math.abs(Math.round(value)))}`;
+}
+
 export function formatPercent(value: number, digits = 1): string {
   const sign = value > 0 ? '+' : '';
   return `${sign}${value.toFixed(digits)}%`;
@@ -68,4 +73,17 @@ export function isToday(iso: string): boolean {
     date.getMonth() === now.getMonth() &&
     date.getDate() === now.getDate()
   );
+}
+
+/** "::ffff:192.168.1.46" -> "192.168.1.46", "::1" -> "This computer" — the address as a person reads it. */
+export function formatIp(ip: string | null | undefined): string {
+  if (!ip) return '';
+  if (ip === '::1' || ip === '127.0.0.1') return 'This computer';
+  return ip.replace(/^::ffff:/, '');
+}
+
+/** "9811122233" / "+91 9811122233" -> "+91 98111 22233". Anything else is returned as typed. */
+export function formatMobile(value: string | null | undefined): string {
+  const digits = String(value ?? '').replace(/\D/g, '').slice(-10);
+  return digits.length === 10 ? `+91 ${digits.slice(0, 5)} ${digits.slice(5)}` : String(value ?? '');
 }

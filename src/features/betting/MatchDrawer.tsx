@@ -42,7 +42,7 @@ export function MatchDrawer({ match, onClose, onChanged }: MatchDrawerProps) {
     { label: 'Exposure', value: formatMoney(current.exposure), color: 'var(--color-live)' },
   ];
 
-  const handleToggleStatus = async (status: 'Live' | 'Completed') => {
+  const handleToggleStatus = async (status: 'Live' | 'Suspended') => {
     if (!accessToken) return;
     setPending(true);
     setError(null);
@@ -152,7 +152,7 @@ function OverviewTab({
   match: ApiMatch;
   totalBets: number;
   pending: boolean;
-  onToggleStatus: (status: 'Live' | 'Completed') => void;
+  onToggleStatus: (status: 'Live' | 'Suspended') => void;
 }) {
   const details = [
     { label: 'Match ID', value: match._id },
@@ -180,7 +180,7 @@ function OverviewTab({
             className={styles.suspend}
             size="sm"
             icon={<BanIcon size={13.993} />}
-            onClick={() => onToggleStatus('Completed')}
+            onClick={() => onToggleStatus('Suspended')}
             disabled={pending}
           >
             {pending ? 'Suspending…' : 'Suspend Match'}

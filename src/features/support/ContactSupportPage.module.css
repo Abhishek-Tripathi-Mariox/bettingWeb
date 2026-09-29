@@ -210,3 +210,22 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* The channel's action is a real link (tel:, WhatsApp, Telegram, mailto:). */
+.channelLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: var(--space-5);
+  border: var(--hairline) solid rgba(var(--channel-rgb), 0.25);
+  border-radius: var(--radius-md);
+  background-color: rgba(var(--channel-rgb), 0.1);
+  padding: 6px var(--space-5);
+  color: rgb(var(--channel-rgb));
+  font-size: var(--font-size-xs);
+  text-decoration: none;
+}
+
+.channelLink:hover {
+  background-color: rgba(var(--channel-rgb), 0.18);
+}

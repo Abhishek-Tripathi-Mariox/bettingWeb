@@ -33,6 +33,9 @@ export function MarketsPage() {
   const [form, setForm] = useState<ApiMarket | 'new' | null>(null);
   const [suspendingAll, setSuspendingAll] = useState(false);
   const [rowPending, setRowPending] = useState<string | null>(null);
+  /** Market whose winner picker is open, and the picked selection. */
+  const [settling, setSettling] = useState<{ id: string; winner: string } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -80,6 +83,29 @@ export function MarketsPage() {
       setMarkets((current) => current.map((item) => (item._id === res.market._id ? res.market : item)));
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : 'Unable to update the market.');
+    } finally {
+      setRowPending(null);
+    }
+  };
+
+  /** Mirrors the backend's `runnersFor`: explicit runners, else the event's two sides. */
+  const selectionsFor = (row: ApiMarket) => {
+    if (row.runners?.length) return row.runners.map((r) => r.name);
+    const name = typeof row.event === 'string' ? '' : row.event.name;
+    const [home, away] = name.split(/\s+vs\.?\s+/i);
+    return [home || name, away || 'Draw'].filter(Boolean);
+  };
+
+  const settle = async () => {
+    if (!accessToken || !settling?.winner) return;
+    setRowPending(settling.id);
+    try {
+      const res = await marketsApi.settle(settling.id, settling.winner, accessToken);
+      setNotice(`Settled on ${settling.winner}: ${res.settled} bets (${res.won} won, ${res.lost} lost).`);
+      setSettling(null);
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Unable to settle the market.');
     } finally {
       setRowPending(null);
     }
@@ -141,15 +167,52 @@ export function MarketsPage() {
     {
       key: 'status',
       header: 'Status',
-      render: (row) => <Badge tone={MARKET_STATUS_TONE[row.status]}>{row.status}</Badge>,
+      render: (row) =>
+        row.winner ? (
+          <Badge tone="info">Settled · {row.winner}</Badge>
+        ) : (
+          <Badge tone={MARKET_STATUS_TONE[row.status]}>{row.status}</Badge>
+        ),
     },
     {
       key: 'actions',
       header: 'Actions',
-      render: (row) => (
+      render: (row) =>
+        row.winner ? null : settling?.id === row._id ? (
+          <div className={styles.rowActions}>
+            <select
+              className={styles.settleSelect}
+              aria-label="Winning selection"
+              value={settling.winner}
+              onChange={(e) => setSettling({ id: row._id, winner: e.target.value })}
+            >
+              <option value="">Winner…</option>
+              {selectionsFor(row).map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <Button
+              className={styles.enable}
+              size="xs"
+              icon={<CheckCircleIcon size={12} />}
+              onClick={settle}
+              disabled={!settling.winner || rowPending === row._id}
+            >
+              {rowPending === row._id ? 'Settling…' : 'Confirm'}
+            </Button>
+            <Button className={styles.edit} size="xs" onClick={() => setSettling(null)}>
+              Cancel
+            </Button>
+          </div>
+        ) : (
         <div className={styles.rowActions}>
           <Button className={styles.edit} size="xs" icon={<PencilIcon size={12} />} onClick={() => setForm(row)}>
             Edit
+          </Button>
+          <Button className={styles.enable} size="xs" onClick={() => setSettling({ id: row._id, winner: '' })}>
+            Settle
           </Button>
           {row.status === 'Active' ? (
             <Button
@@ -243,6 +306,11 @@ export function MarketsPage() {
         {error ? (
           <p role="alert" style={{ color: 'var(--color-danger)', margin: '12px 0 0', fontSize: 12 }}>
             {error}
+          </p>
+        ) : null}
+        {notice ? (
+          <p role="status" style={{ color: 'var(--color-success)', margin: '12px 0 0', fontSize: 12 }}>
+            {notice}
           </p>
         ) : null}
 

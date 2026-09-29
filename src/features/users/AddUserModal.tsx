@@ -5,59 +5,109 @@ import { Button } from '../../components/ui/Button/Button';
 import { Modal } from '../../components/ui/Modal/Modal';
 import { SelectField } from '../../components/ui/TextField/SelectField';
 import { TextField } from '../../components/ui/TextField/TextField';
-import type { Person } from './usersData';
+import { useAuth } from '../auth/authContext';
+import { accountLabel, networkApi } from '../../lib/api/network';
+import type { AccountRef, KycState, NetworkAccount } from '../../lib/api/network';
 import styles from './AddUserModal.module.css';
 
-const AGENTS = ['Sahil Verma (AG-3310)', 'Nitin Yadav (AG-3324)', 'Farhan Ali (AG-3341)'] as const;
-const KYC_OPTIONS = ['Verified', 'Pending', 'Rejected'] as const;
-
-export type AddUserModalProps = {
-  /** Singular noun for the record being created, e.g. "User". */
-  title: string;
-  onClose: () => void;
-  onCreate: (person: Person) => void;
+/** Same rule as the backend: an Indian mobile, with or without +91 / spaces. */
+const isMobile = (value: string) => {
+  if (!/^[\d+\-\s()]+$/.test(value)) return false;
+  const digits = value.replace(/\D/g, '');
+  const local = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits.length === 11 && digits.startsWith('0') ? digits.slice(1) : digits;
+  return /^[6-9]\d{9}$/.test(local);
 };
 
-/** The create dialog from node 79:4484. */
-export function AddUserModal({ title, onClose, onCreate }: AddUserModalProps) {
+const KYC_OPTIONS: KycState[] = ['Not Submitted', 'Pending', 'Verified', 'Rejected'];
+const NO_AGENT = '— Unassigned —';
+
+export type AddUserModalProps = {
+  /** Singular noun for the record, e.g. "User". */
+  title: string;
+  /** The account being edited, or null to create a new one. */
+  account: NetworkAccount | null;
+  /** Agents the new user can be placed under. */
+  agents: AccountRef[];
+  /** Super-admin may leave a user unassigned; everyone else must pick an agent. */
+  agentOptional: boolean;
+  /** Only roles that review KYC may set it by hand; others' new users start "Not Submitted". */
+  canSetKyc: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+};
+
+/** The create dialog from node 79:4484 — also used to edit an existing user. */
+export function AddUserModal({ title, account, agents, agentOptional, canSetKyc, onClose, onSaved }: AddUserModalProps) {
+  const { accessToken } = useAuth();
+  const isEdit = account !== null;
+  const agentLabels = agents.map(accountLabel);
+
   const [form, setForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
+    name: account?.name ?? '',
+    email: account?.email ?? '',
+    phone: account?.phone ?? '',
+    username: account?.username ?? '',
     password: '',
-    dob: '',
-    balance: '0',
-    city: '',
-    state: '',
-    agent: '',
-    kyc: '',
+    dob: account?.dob ? account.dob.slice(0, 10) : '',
+    city: account?.city ?? '',
+    state: account?.state ?? '',
+    agent: agents.length === 1 && !agentOptional ? agentLabels[0] : '',
+    kyc: (account?.kyc ?? 'Not Submitted') as string,
   });
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const set = (key: keyof typeof form) => (value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const name = form.name.trim() || `New ${title}`;
-    onCreate({
-      id: `U${Math.floor(1000 + form.name.length * 37 + form.phone.length)}`,
-      name,
-      email: form.email.trim() || '—',
-      phone: form.phone.trim() || '—',
-      balance: `₹${form.balance || '0'}`,
-      totalBets: 0,
-      kyc: (form.kyc as Person['kyc']) || 'Pending',
-      status: 'Active',
-      risk: 'low',
-      joined: 'Today',
-      bets: [],
-    });
+    if (!accessToken) return;
+
+    const profile = {
+      name: form.name.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim(),
+      dob: form.dob || undefined,
+      city: form.city.trim(),
+      state: form.state.trim(),
+      ...(canSetKyc ? { kyc: form.kyc as KycState } : {}),
+    };
+
+    if (!profile.name) return setError('Full name is required.');
+    if (profile.phone && !isMobile(profile.phone)) return setError('Enter a valid 10-digit mobile number.');
+    if (profile.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) return setError('Enter a valid email address.');
+
+    setPending(true);
+    setError(null);
+    try {
+      if (isEdit) {
+        await networkApi.update(account._id, profile, accessToken);
+      } else {
+        const username = form.username.trim().toLowerCase();
+        if (!/^[a-z0-9_]{4,32}$/.test(username)) {
+          throw new Error('Username must be 4–32 lowercase letters, numbers or underscores.');
+        }
+        if (form.password.length < 6) throw new Error('Password must be at least 6 characters.');
+        const parent = agents[agentLabels.indexOf(form.agent)];
+        if (!parent && !agentOptional) throw new Error('Choose an agent for this user.');
+        await networkApi.create(
+          { role: 'player', username, password: form.password, parentId: parent?._id, ...profile },
+          accessToken,
+        );
+      }
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to reach the server.');
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
     <Modal
-      title={`Add New ${title}`}
-      subtitle={`Create a new platform ${title.toLowerCase()} account`}
+      title={isEdit ? `Edit ${title}` : `Add New ${title}`}
+      subtitle={isEdit ? `Update ${account.name || account.username}'s details` : `Create a new platform ${title.toLowerCase()} account`}
       onClose={onClose}
     >
       <div className={styles.banner}>
@@ -65,7 +115,7 @@ export function AddUserModal({ title, onClose, onCreate }: AddUserModalProps) {
           <UserIcon size={19.999} />
         </span>
         <div>
-          <p className={styles.bannerTitle}>New {title}</p>
+          <p className={styles.bannerTitle}>{isEdit ? account.username : `New ${title}`}</p>
           <p className={styles.bannerSubtitle}>Enter details below</p>
         </div>
       </div>
@@ -80,7 +130,7 @@ export function AddUserModal({ title, onClose, onCreate }: AddUserModalProps) {
             onChange={(event) => set('name')(event.target.value)}
           />
           <TextField
-            label="Email Address *"
+            label="Email Address"
             labelCase="caps"
             type="email"
             placeholder="user@example.com"
@@ -88,34 +138,37 @@ export function AddUserModal({ title, onClose, onCreate }: AddUserModalProps) {
             onChange={(event) => set('email')(event.target.value)}
           />
           <TextField
-            label="Phone Number *"
+            label="Phone Number"
             labelCase="caps"
             placeholder="+91 XXXXX XXXXX"
             value={form.phone}
             onChange={(event) => set('phone')(event.target.value)}
           />
-          <TextField
-            label="Password *"
-            labelCase="caps"
-            type="password"
-            placeholder="Min 8 characters"
-            value={form.password}
-            onChange={(event) => set('password')(event.target.value)}
-          />
+          {isEdit ? null : (
+            <>
+              <TextField
+                label="Username *"
+                labelCase="caps"
+                placeholder="e.g. rahul_92"
+                value={form.username}
+                onChange={(event) => set('username')(event.target.value)}
+              />
+              <TextField
+                label="Password *"
+                labelCase="caps"
+                type="password"
+                placeholder="Min 6 characters"
+                value={form.password}
+                onChange={(event) => set('password')(event.target.value)}
+              />
+            </>
+          )}
           <TextField
             label="Date of Birth"
             labelCase="caps"
             type="date"
             value={form.dob}
             onChange={(event) => set('dob')(event.target.value)}
-          />
-          <TextField
-            label="Initial Balance (₹)"
-            labelCase="caps"
-            inputMode="numeric"
-            placeholder="0"
-            value={form.balance}
-            onChange={(event) => set('balance')(event.target.value)}
           />
           <TextField
             label="City"
@@ -131,19 +184,26 @@ export function AddUserModal({ title, onClose, onCreate }: AddUserModalProps) {
             value={form.state}
             onChange={(event) => set('state')(event.target.value)}
           />
-          <SelectField
-            label="Assign Agent"
-            options={AGENTS}
-            value={form.agent}
-            onChange={(event) => set('agent')(event.target.value)}
-          />
-          <SelectField
-            label="KYC Status"
-            options={KYC_OPTIONS}
-            value={form.kyc}
-            onChange={(event) => set('kyc')(event.target.value)}
-          />
+          {isEdit ? null : (
+            <SelectField
+              label={agentOptional ? 'Assign Agent' : 'Assign Agent *'}
+              options={agentOptional ? [NO_AGENT, ...agentLabels] : agentLabels}
+              value={form.agent}
+              onChange={(event) => set('agent')(event.target.value)}
+            />
+          )}
+          {canSetKyc ? (
+            <SelectField
+              label="KYC Status"
+              options={KYC_OPTIONS}
+              placeholder={null}
+              value={form.kyc}
+              onChange={(event) => set('kyc')(event.target.value)}
+            />
+          ) : null}
         </div>
+
+        {error ? <p role="alert">{error}</p> : null}
 
         <div className={styles.footer}>
           <Button
@@ -151,9 +211,10 @@ export function AddUserModal({ title, onClose, onCreate }: AddUserModalProps) {
             type="submit"
             variant="primary"
             size="sm"
+            disabled={pending}
             icon={<CheckCircleIcon size={13.994} />}
           >
-            Create {title}
+            {pending ? 'Saving…' : isEdit ? 'Save Changes' : `Create ${title}`}
           </Button>
           <Button className={styles.cancel} variant="outline" size="sm" onClick={onClose}>
             Cancel

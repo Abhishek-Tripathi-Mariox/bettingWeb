@@ -34,11 +34,12 @@ export type ExposureRow = {
 export const EVENT_STATUS_TONE: Record<EventStatus, BadgeTone> = {
   Live: 'danger',
   Upcoming: 'info',
+  Suspended: 'warning',
   Completed: 'success',
   Settled: 'neutral',
 };
 
-export const EVENT_FILTERS = ['All', 'Live', 'Upcoming', 'Completed', 'Settled'] as const;
+export const EVENT_FILTERS = ['All', 'Live', 'Upcoming', 'Suspended', 'Completed', 'Settled'] as const;
 
 const BET_STATUS_TONE: Record<ApiEventBet['status'], BadgeTone> = {
   Pending: 'warning',

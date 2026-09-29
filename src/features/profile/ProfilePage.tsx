@@ -1,12 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CheckCircleIcon,
-  ExportIcon,
-  SendIcon,
-} from '../../components/icons';
+import { CheckCircleIcon } from '../../components/icons';
 import { Badge } from '../../components/ui/Badge/Badge';
 import { Button } from '../../components/ui/Button/Button';
 import { DataTable } from '../../components/ui/DataTable/DataTable';
@@ -20,30 +14,53 @@ import { ApiRequestError, authApi } from '../../lib/api';
 import type { ApiUser } from '../../lib/api';
 import { resizeImageToDataUri } from '../../lib/image';
 import { cx } from '../../lib/cx';
+import { networkApi } from '../../lib/api/network';
+import type { DetailActivity, MyProfile } from '../../lib/api/network';
+import { formatIp, formatMoney, formatRelativeTime, formatRupees } from '../../lib/format';
+import { ACTIVITY_TITLE, describeUserAgent, formatDate, activityExtras } from '../users/usersData';
 import {
-  LOGIN_HISTORY,
-  LOGIN_STATUS_TONE,
   MOVEMENT_ICON,
-  MOVEMENT_STATUS_TONE,
   PASSWORD_HINT,
-  PROFILE_ACTIVITY,
   PROFILE_PREFERENCES,
-  QUICK_STATS,
-  TRUSTED_DEVICES,
   getProfileIdentity,
   getProfileTabs,
-  getProfileWallet,
   splitName,
 } from './profileData';
-import type { LoginEvent, ProfileWallet } from './profileData';
 import styles from './ProfilePage.module.css';
 
 /** Account profile — node 112:11449 plus its six other tab states. */
 export function ProfilePage({ role }: { role: RoleDefinition }) {
-  const { accessToken, setTokens } = useAuth();
+  const { accessToken, setTokens, setDisplayName } = useAuth();
   const tabs = getProfileTabs(role);
-  const wallet = getProfileWallet(role);
   const [tab, setTab] = useState<string>(tabs[0].label);
+  const [overview, setOverview] = useState<MyProfile | null>(null);
+  const [overviewVersion, setOverviewVersion] = useState(0);
+
+  // Real stats, activity, sign-ins, sessions and wallet for the signed-in account.
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    networkApi
+      .myProfile(accessToken)
+      .then((res) => {
+        if (!cancelled) setOverview(res);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, overviewVersion]);
+  const reloadOverview = () => setOverviewVersion((v) => v + 1);
+
+  const quickStats = [
+    { label: 'Total Actions', value: overview ? overview.stats.totalActions.toLocaleString('en-IN') : '…' },
+    { label: 'Login Sessions', value: overview ? overview.stats.loginCount.toLocaleString('en-IN') : '…' },
+    {
+      label: 'Last Login',
+      value: overview ? (overview.stats.lastLoginAt ? formatRelativeTime(overview.stats.lastLoginAt) : 'Never') : '…',
+    },
+    { label: 'Member Since', value: overview ? formatDate(overview.stats.memberSince) : '…' },
+  ];
 
   // The live signed-in account — every role (super-admin, franchise, super-agent,
   // agent) shares this same page, so it's fetched rather than derived from `role`.
@@ -66,8 +83,9 @@ export function ProfilePage({ role }: { role: RoleDefinition }) {
   }, [accessToken]);
 
   const fallback = getProfileIdentity(role);
-  const displayName = user ? user.name || fallback.name : fallback.name;
-  const displayEmail = user ? user.email || fallback.email : fallback.email;
+  // Only what the account really holds: no made-up email for one that has none.
+  const displayName = user ? user.name || user.username : fallback.name;
+  const displayEmail = user ? user.email || `@${user.username}` : '';
 
   return (
     <div className={styles.page}>
@@ -95,7 +113,7 @@ export function ProfilePage({ role }: { role: RoleDefinition }) {
         <section className={styles.card}>
           <p className={styles.cardTitle}>Quick Stats</p>
           <dl className={styles.quickStats}>
-            {QUICK_STATS.map((stat) => (
+            {quickStats.map((stat) => (
               <div key={stat.label} className={styles.quickStat}>
                 <dt className={styles.quickLabel}>{stat.label}</dt>
                 <dd className={styles.quickValue}>{stat.value}</dd>
@@ -127,17 +145,28 @@ export function ProfilePage({ role }: { role: RoleDefinition }) {
             role={role}
             user={user}
             accessToken={accessToken}
-            onSaved={setUser}
+            onSaved={(saved) => {
+              setUser(saved);
+              setDisplayName(saved.name);
+            }}
           />
         ) : null}
         {tab === 'Change Password' ? (
           <ChangePasswordTab accessToken={accessToken} onChanged={setTokens} />
         ) : null}
-        {tab === 'Wallet Activity' && wallet ? <WalletActivityTab wallet={wallet} /> : null}
-        {tab === 'Activity' ? <ActivityTab /> : null}
-        {tab === 'Login History' ? <LoginHistoryTab /> : null}
-        {tab === 'Devices' ? <DevicesTab /> : null}
-        {tab === 'Preferences' ? <PreferencesTab /> : null}
+        {tab === 'Wallet Activity' ? <WalletActivityTab wallet={overview?.wallet ?? null} /> : null}
+        {tab === 'Activity' ? <ActivityTab entries={overview?.activity ?? null} /> : null}
+        {tab === 'Login History' ? <LoginHistoryTab logins={overview?.logins ?? null} /> : null}
+        {tab === 'Devices' ? (
+          <DevicesTab overview={overview} accessToken={accessToken} onChanged={reloadOverview} />
+        ) : null}
+        {tab === 'Preferences' ? (
+          <PreferencesTab
+            key={overview ? 'loaded' : 'pending'}
+            saved={overview?.preferences ?? {}}
+            accessToken={accessToken}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -237,7 +266,7 @@ function EditProfileTab({
 
   const [firstName, setFirstName] = useState(savedFirst);
   const [lastName, setLastName] = useState(savedLast);
-  const [email, setEmail] = useState(user?.email ?? fallback.email);
+  const [email, setEmail] = useState(user?.email ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
   const [city, setCity] = useState(user?.city ?? '');
   const [pending, setPending] = useState(false);
@@ -300,28 +329,23 @@ function EditProfileTab({
   );
 }
 
-/** Wallet Activity tab — node 139:88659. */
-function WalletActivityTab({ wallet }: { wallet: ProfileWallet }) {
+/** Wallet Activity tab — node 139:88659, from the account's own wallet and its network's ledger. */
+function WalletActivityTab({ wallet }: { wallet: MyProfile['wallet'] }) {
+  if (!wallet) return <TabCard title="Wallet Activity" subtitle="Loading…">{null}</TabCard>;
+  const totals = [
+    { label: 'Deposited by Users', value: formatMoney(wallet.deposited), color: 'var(--color-success)' },
+    { label: 'Withdrawn by Users', value: formatMoney(wallet.withdrawn), color: 'var(--color-danger)' },
+    { label: 'Commission Earned', value: formatMoney(wallet.commissionEarned), color: 'var(--color-warning)' },
+  ];
   return (
     <div className={styles.wallet}>
       <section className={styles.balanceCard}>
         <p className={styles.balanceLabel}>Current Wallet Balance</p>
-        <p className={styles.balanceValue}>{wallet.balance}</p>
-        <div className={styles.balanceActions}>
-          <Button className={styles.deposit} size="xs" icon={<ArrowDownIcon size={12} />}>
-            Deposit
-          </Button>
-          <Button className={styles.withdraw} size="xs" icon={<ArrowUpIcon size={12} />}>
-            Withdraw
-          </Button>
-          <Button size="xs" icon={<SendIcon size={12} />}>
-            Transfer
-          </Button>
-        </div>
+        <p className={styles.balanceValue}>{formatRupees(wallet.balance)}</p>
       </section>
 
       <div className={styles.walletTotals}>
-        {wallet.totals.map((total) => (
+        {totals.map((total) => (
           <MetricTile key={total.label} size="lg" label={total.label} value={total.value} color={total.color} />
         ))}
       </div>
@@ -329,25 +353,36 @@ function WalletActivityTab({ wallet }: { wallet: ProfileWallet }) {
       <section className={styles.card}>
         <div className={styles.walletHead}>
           <p className={styles.cardTitle}>Recent Transactions</p>
-          <Button variant="quiet" size="xs" icon={<ExportIcon size={12} />}>
-            Export
-          </Button>
         </div>
+        {wallet.transactions.length === 0 ? <p className={styles.movementMeta}>No transactions yet.</p> : null}
         <ul className={styles.movements}>
-          {wallet.movements.map((movement) => {
-            const Icon = MOVEMENT_ICON[movement.direction];
+          {wallet.transactions.map((txn) => {
+            const direction = txn.amount >= 0 ? 'in' : 'out';
+            const Icon = MOVEMENT_ICON[direction];
+            const who = !txn.user ? 'Platform' : typeof txn.user === 'string' ? txn.user.slice(-6) : txn.user.name || txn.user.username;
             return (
-              <li key={movement.meta} className={styles.movement}>
-                <span className={cx(styles.movementTile, styles[movement.direction])}>
+              <li key={txn._id} className={styles.movement}>
+                <span className={cx(styles.movementTile, styles[direction])}>
                   <Icon size={13.993} />
                 </span>
                 <div className={styles.movementText}>
-                  <p className={styles.movementLabel}>{movement.label}</p>
-                  <p className={styles.movementMeta}>{movement.meta}</p>
+                  <p className={styles.movementLabel}>
+                    {txn.type} — {who}
+                  </p>
+                  <p className={styles.movementMeta}>
+                    {[txn.reference || txn._id.slice(-8).toUpperCase(), txn.method, formatRelativeTime(txn.createdAt)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
                 </div>
                 <div className={styles.movementAmount}>
-                  <p className={cx(styles.amount, styles[movement.direction])}>{movement.amount}</p>
-                  <Badge tone={MOVEMENT_STATUS_TONE[movement.status]}>{movement.status}</Badge>
+                  <p className={cx(styles.amount, styles[direction])}>
+                    {txn.amount >= 0 ? '+' : ''}
+                    {formatRupees(txn.amount)}
+                  </p>
+                  <Badge tone={txn.status === 'Completed' ? 'success' : txn.status === 'Failed' ? 'danger' : 'warning'}>
+                    {txn.status === 'Completed' ? 'Success' : txn.status}
+                  </Badge>
                 </div>
               </li>
             );
@@ -451,35 +486,54 @@ function ChangePasswordTab({
   );
 }
 
-function ActivityTab() {
+function ActivityTab({ entries }: { entries: MyProfile['activity'] | null }) {
   return (
     <TabCard title="Recent Activity" subtitle="Last 20 actions performed in the platform">
       <div className={styles.activityList}>
-        {PROFILE_ACTIVITY.map((entry) => (
-          <article key={entry.description} className={styles.activity}>
-            <div className={styles.activityMain}>
-              <p className={styles.activityText}>{entry.description}</p>
-              <p className={styles.activityTime}>{entry.time}</p>
-            </div>
-            <span className={styles.category}>{entry.category}</span>
-          </article>
-        ))}
+        {entries === null ? <p className={styles.activityTime}>Loading…</p> : null}
+        {entries?.length === 0 ? <p className={styles.activityTime}>No actions recorded yet.</p> : null}
+        {entries?.map((entry) => {
+          const who =
+            entry.target && typeof entry.target === 'object' ? ` — ${entry.target.name || entry.target.username}` : '';
+          const extras = activityExtras(entry.metadata);
+          const target = `${who}${extras ? ` · ${extras}` : ''}`;
+          return (
+            <article key={entry._id} className={styles.activity}>
+              <div className={styles.activityMain}>
+                <p className={styles.activityText}>
+                  {ACTIVITY_TITLE[entry.action] ?? entry.action}
+                  {target}
+                </p>
+                <p className={styles.activityTime}>{formatRelativeTime(entry.createdAt)}</p>
+              </div>
+              <span className={styles.category}>{entry.action.split('_')[0]}</span>
+            </article>
+          );
+        })}
       </div>
     </TabCard>
   );
 }
 
-function LoginHistoryTab() {
-  const columns: Column<LoginEvent>[] = [
-    { key: 'when', header: 'Date & Time', render: (row) => <span className={styles.strong}>{row.when}</span> },
-    { key: 'ip', header: 'IP Address', render: (row) => <span className={styles.mono}>{row.ip}</span> },
-    { key: 'browser', header: 'Browser', render: (row) => <span className={styles.muted}>{row.browser}</span> },
-    { key: 'os', header: 'OS', render: (row) => <span className={styles.muted}>{row.os}</span> },
-    { key: 'location', header: 'Location', render: (row) => <span className={styles.muted}>{row.location}</span> },
+function LoginHistoryTab({ logins }: { logins: DetailActivity[] | null }) {
+  const columns: Column<DetailActivity>[] = [
+    {
+      key: 'when',
+      header: 'Date & Time',
+      render: (row) => <span className={styles.strong}>{new Date(row.createdAt).toLocaleString('en-IN')}</span>,
+    },
+    { key: 'ip', header: 'IP Address', render: (row) => <span className={styles.mono}>{formatIp(row.ip) || '—'}</span> },
+    {
+      key: 'device',
+      header: 'Browser / OS',
+      render: (row) => <span className={styles.muted}>{describeUserAgent(row.userAgent).name}</span>,
+    },
     {
       key: 'status',
       header: 'Status',
-      render: (row) => <Badge tone={LOGIN_STATUS_TONE[row.status]}>{row.status}</Badge>,
+      render: (row) => (
+        <Badge tone={row.status === 'failed' ? 'danger' : 'success'}>{row.status === 'failed' ? 'Failed' : 'Success'}</Badge>
+      ),
     },
   ];
 
@@ -488,47 +542,99 @@ function LoginHistoryTab() {
       <div className={styles.table}>
         <DataTable
           columns={columns}
-          rows={LOGIN_HISTORY}
-          rowKey={(row) => row.when}
-          rowClassName={(row) => (row.status === 'Failed' ? styles.rowFailed : undefined)}
+          rows={logins ?? []}
+          rowKey={(row) => row._id}
+          rowClassName={(row) => (row.status === 'failed' ? styles.rowFailed : undefined)}
           size="md"
-          emptyMessage="No sign-in events recorded."
+          emptyMessage={logins === null ? 'Loading…' : 'No sign-in events recorded.'}
         />
       </div>
     </TabCard>
   );
 }
 
-function DevicesTab() {
+function DevicesTab({
+  overview,
+  accessToken,
+  onChanged,
+}: {
+  overview: MyProfile | null;
+  accessToken: string | null;
+  onChanged: () => void;
+}) {
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const sessions = overview?.sessions ?? [];
+  // The newest session from this browser is the one in use right now.
+  const currentId = sessions.find((session) => session.userAgent === overview?.currentUserAgent)?._id;
+
+  const remove = async (id: string) => {
+    if (!accessToken) return;
+    setPendingId(id);
+    setError(null);
+    try {
+      await networkApi.revokeSession(id, accessToken);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Unable to remove this device.');
+    } finally {
+      setPendingId(null);
+    }
+  };
+
   return (
-    <TabCard title="Trusted Devices" subtitle="Devices that have accessed your account">
+    <TabCard title="Trusted Devices" subtitle="Devices currently signed in to your account">
       <div className={styles.stack}>
-        {TRUSTED_DEVICES.map((device) => (
-          <article key={device.name} className={styles.device}>
-            <div className={styles.deviceMain}>
-              <p className={styles.deviceName}>
-                {device.name}
-                {device.current ? <Badge tone="success">Current</Badge> : null}
-              </p>
-              <p className={styles.deviceMeta}>{device.lastUsed}</p>
-            </div>
-            {device.current ? null : (
-              <Button className={styles.remove} size="xs">
-                Remove
-              </Button>
-            )}
-          </article>
-        ))}
+        {overview === null ? <p className={styles.deviceMeta}>Loading…</p> : null}
+        {error ? <p className={styles.deviceMeta}>{error}</p> : null}
+        {sessions.map((session) => {
+          const current = session._id === currentId;
+          return (
+            <article key={session._id} className={styles.device}>
+              <div className={styles.deviceMain}>
+                <p className={styles.deviceName}>
+                  {describeUserAgent(session.userAgent).name}
+                  {current ? <Badge tone="success">Current</Badge> : null}
+                </p>
+                <p className={styles.deviceMeta}>
+                  Last used: {formatRelativeTime(session.updatedAt)}
+                  {session.ip ? ` · ${formatIp(session.ip)}` : ''}
+                </p>
+              </div>
+              {current ? null : (
+                <Button className={styles.remove} size="xs" disabled={pendingId === session._id} onClick={() => remove(session._id)}>
+                  {pendingId === session._id ? 'Removing…' : 'Remove'}
+                </Button>
+              )}
+            </article>
+          );
+        })}
       </div>
     </TabCard>
   );
 }
 
-/** Preferences tab — node 139:113915. */
-function PreferencesTab() {
+/** Preferences tab — node 139:113915, saved on the account. */
+function PreferencesTab({ saved, accessToken }: { saved: Record<string, boolean>; accessToken: string | null }) {
   const [prefs, setPrefs] = useState(() =>
-    Object.fromEntries(PROFILE_PREFERENCES.map((item) => [item.label, item.on])),
+    Object.fromEntries(PROFILE_PREFERENCES.map((item) => [item.label, saved[item.label] ?? item.on])),
   );
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const save = async () => {
+    if (!accessToken) return;
+    setPending(true);
+    setMessage(null);
+    try {
+      await authApi.updateProfile(accessToken, { preferences: prefs });
+      setMessage('Preferences saved.');
+    } catch (err) {
+      setMessage(err instanceof ApiRequestError ? err.message : 'Unable to save preferences.');
+    } finally {
+      setPending(false);
+    }
+  };
 
   return (
     <TabCard title="Preferences" subtitle="Notification and display preferences">
@@ -544,9 +650,10 @@ function PreferencesTab() {
           </li>
         ))}
       </ul>
+      {message ? <p className={styles.prefLabel}>{message}</p> : null}
       <div className={styles.actions}>
-        <Button variant="primary" size="sm" icon={<CheckCircleIcon size={13.993} />}>
-          Save Preferences
+        <Button variant="primary" size="sm" disabled={pending} icon={<CheckCircleIcon size={13.993} />} onClick={save}>
+          {pending ? 'Saving…' : 'Save Preferences'}
         </Button>
       </div>
     </TabCard>

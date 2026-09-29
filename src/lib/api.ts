@@ -18,13 +18,63 @@ type RequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   accessToken?: string | null;
+  /** Set on the one retry after a token refresh, so a second 401 isn't retried again. */
+  retried?: boolean;
 };
+
+export type TokenPair = { accessToken: string; refreshToken: string };
+
+/**
+ * Access tokens last 15 minutes. Pages pass the token they have in state;
+ * when the server answers 401 the client swaps the pair via the refresh
+ * token (once, however many requests failed together), tells AuthProvider,
+ * and replays the request — so a panel left open keeps working.
+ */
+let activeTokens: TokenPair | null = null;
+let sessionListener: { onRotate: (tokens: TokenPair) => void; onExpire: () => void } | null = null;
+let rotation: Promise<string | null> | null = null;
+
+export const bindSession = (tokens: TokenPair | null) => {
+  activeTokens = tokens;
+};
+
+export const setSessionListener = (listener: typeof sessionListener) => {
+  sessionListener = listener;
+};
+
+/** Returns a usable access token after `stale` was rejected, or null if the session is over. */
+export async function rotateTokens(stale: string): Promise<string | null> {
+  if (!activeTokens) return null;
+  // Another request already refreshed while this one was in flight.
+  if (activeTokens.accessToken !== stale) return activeTokens.accessToken;
+  if (!rotation) {
+    const { refreshToken } = activeTokens;
+    rotation = (async () => {
+      try {
+        const next = await request<TokenPair>('/auth/refresh', { method: 'POST', body: { refreshToken } });
+        activeTokens = next;
+        sessionListener?.onRotate(next);
+        return next.accessToken;
+      } catch (err) {
+        // Only a rejected refresh token ends the session — not a network blip.
+        if (err instanceof ApiRequestError && err.status !== 0) {
+          activeTokens = null;
+          sessionListener?.onExpire();
+        }
+        return null;
+      } finally {
+        rotation = null;
+      }
+    })();
+  }
+  return rotation;
+}
 
 /** Bounds every request so a slow/unreachable API can't hang the UI (e.g. session restore on load). */
 const REQUEST_TIMEOUT_MS = 10000;
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, accessToken } = options;
+  const { method = 'GET', body, accessToken, retried = false } = options;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -51,8 +101,18 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const isJson = response.headers.get('content-type')?.includes('application/json');
   const payload = isJson ? await response.json().catch(() => null) : null;
 
+  if (response.status === 401 && accessToken && !retried) {
+    const fresh = await rotateTokens(accessToken);
+    if (fresh) return request<T>(path, { ...options, accessToken: fresh, retried: true });
+  }
+
   if (!response.ok) {
     const message = payload?.error?.message || `Request failed (${response.status})`;
+    // Suspended while the panel was open: the session is over.
+    if (response.status === 403 && accessToken && /suspended/i.test(message)) {
+      activeTokens = null;
+      sessionListener?.onExpire();
+    }
     throw new ApiRequestError(response.status, message, payload?.error?.details);
   }
 
@@ -87,6 +147,8 @@ export type ProfileUpdate = Partial<{
   dob: string;
   /** Data URI ("data:image/jpeg;base64,..."), PNG/JPEG/WebP only, ~1.5MB decoded max. */
   avatar: string;
+  /** Profile → Preferences toggles, keyed by setting label. */
+  preferences: Record<string, boolean>;
 }>;
 
 export type PermissionGroup = {

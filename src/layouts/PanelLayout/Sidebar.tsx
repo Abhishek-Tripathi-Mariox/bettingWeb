@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { CollapseIcon, LogoutIcon } from '../../components/icons';
 import { BrandMark } from '../../components/ui/BrandMark/BrandMark';
@@ -11,6 +12,8 @@ import styles from './Sidebar.module.css';
 
 export type SidebarProps = {
   role: RoleDefinition;
+  /** The signed-in account's name (its username until a name is set). */
+  displayName: string;
   open: boolean;
   onNavigate: () => void;
   onToggle: () => void;
@@ -18,7 +21,11 @@ export type SidebarProps = {
 };
 
 /** Left rail — identical for all four panels; entries come from the role. */
-export function Sidebar({ role, open, onNavigate, onToggle, onSignOut }: SidebarProps) {
+export function Sidebar({ role, displayName, open, onNavigate, onToggle, onSignOut }: SidebarProps) {
+  const [menuQuery, setMenuQuery] = useState('');
+  const term = menuQuery.trim().toLowerCase();
+  const items = term ? role.nav.filter((item) => item.label.toLowerCase().includes(term)) : role.nav;
+
   return (
     <aside className={cx(styles.sidebar, open && styles.sidebarOpen)}>
       <div className={styles.brand}>
@@ -43,17 +50,24 @@ export function Sidebar({ role, open, onNavigate, onToggle, onSignOut }: Sidebar
           <Dot tone={role.accent} />
           <div>
             <p className={styles.identityRole}>{role.label}</p>
-            <p className={styles.identityUser}>{role.operator} · Online</p>
+            <p className={styles.identityUser}>{displayName} · Online</p>
           </div>
         </div>
       </div>
 
       <div className={styles.search}>
-        <SearchInput size="sm" placeholder="Search menu..." aria-label="Search menu" />
+        <SearchInput
+          size="sm"
+          placeholder="Search menu..."
+          aria-label="Search menu"
+          value={menuQuery}
+          onChange={(event) => setMenuQuery(event.target.value)}
+        />
       </div>
 
       <nav className={styles.nav}>
-        {role.nav.map((item) => {
+        {items.length === 0 ? <p className={styles.navEmpty}>No menu matches “{menuQuery.trim()}”</p> : null}
+        {items.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink
@@ -61,7 +75,10 @@ export function Sidebar({ role, open, onNavigate, onToggle, onSignOut }: Sidebar
               to={navPath(role, item)}
               end={item.segment === ''}
               className={({ isActive }) => cx(styles.navItem, isActive && styles.navItemActive)}
-              onClick={onNavigate}
+              onClick={() => {
+                setMenuQuery('');
+                onNavigate();
+              }}
             >
               <Icon size={15.999} />
               {item.label}

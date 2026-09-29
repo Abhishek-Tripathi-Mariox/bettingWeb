@@ -173,3 +173,10 @@
     transform: translateX(0);
   }
 }
+
+.navEmpty {
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}

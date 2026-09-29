@@ -41,11 +41,11 @@ export function PanelSection({ item }: { item: NavItem }) {
 
   if (item.segment === '') return <DashboardView role={role} />;
 
-  if (item.segment === 'franchise') return <FranchisePage role={role} />;
+  if (item.segment === 'franchise') return <FranchisePage />;
 
   if (item.segment === 'super-agent') return <SuperAgentPage role={role} />;
 
-  if (item.segment === 'agent') return <AgentPage role={role} />;
+  if (item.segment === 'agent') return <AgentPage />;
 
   if (item.segment === 'wallet') return <WalletPage />;
 
@@ -84,7 +84,7 @@ export function PanelSection({ item }: { item: NavItem }) {
   if (item.segment === 'permissions') return <PermissionsPage />;
 
   if (PEOPLE_SEGMENTS.has(item.segment)) {
-    return <PeopleListPage role={role} segment={item.segment} title={item.label} />;
+    return <PeopleListPage role={role} title={item.label} />;
   }
 
   return (

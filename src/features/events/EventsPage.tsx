@@ -159,7 +159,7 @@ export function EventsPage() {
               className={styles.suspend}
               size="xs"
               icon={<BanIcon size={12} />}
-              onClick={() => updateStatus(event, 'Completed')}
+              onClick={() => updateStatus(event, 'Suspended')}
             >
               Suspend
             </Button>

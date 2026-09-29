@@ -6,21 +6,33 @@ import { Button } from '../../components/ui/Button/Button';
 import { Drawer } from '../../components/ui/Drawer/Drawer';
 import { Tabs } from '../../components/ui/Tabs/Tabs';
 import { TextField } from '../../components/ui/TextField/TextField';
+import { useAuth } from '../auth/authContext';
+import { ApiRequestError } from '../../lib/api';
+import { partnershipApi } from '../../lib/api/partnership';
+import type { ApiPartner, ApiPartnerSettlement } from '../../lib/api/partnership';
+import { formatMoney } from '../../lib/format';
 import {
   PARTNER_STATUS_TONE,
-  REVENUE_MONTHS,
-  REVENUE_TOTAL,
-  SETTLEMENTS,
+  formatBetVolume,
+  formatRevShare,
+  formatSince,
+  mapRevenueHistory,
+  revenueTotal,
+  settlementsForPartner,
 } from './partnershipData';
-import type { Partner } from './partnershipData';
 import styles from './PartnerDrawer.module.css';
 
 const TABS = ['Overview', 'Revenue', 'Settings'] as const;
 type Tab = (typeof TABS)[number];
 
+const errorMessage = (err: unknown) =>
+  err instanceof ApiRequestError ? err.message : 'Unable to reach the server.';
+
 export type PartnerDrawerProps = {
-  partner: Partner;
+  partner: ApiPartner;
+  settlements: ApiPartnerSettlement[];
   onEdit: () => void;
+  onChanged: () => void | Promise<void>;
   onClose: () => void;
 };
 
@@ -28,13 +40,32 @@ export type PartnerDrawerProps = {
  * Partner detail sheet — nodes 119:52099 (overview), 119:52900 (revenue) and
  * 119:53743 (settings). One panel; only the tab body changes.
  */
-export function PartnerDrawer({ partner, onEdit, onClose }: PartnerDrawerProps) {
+export function PartnerDrawer({ partner, settlements, onEdit, onChanged, onClose }: PartnerDrawerProps) {
+  const { accessToken } = useAuth();
   const [tab, setTab] = useState<Tab>('Overview');
+  const [statusPending, setStatusPending] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+
+  const isActive = partner.status === 'Active';
+
+  const toggleStatus = async () => {
+    if (!accessToken) return;
+    setStatusPending(true);
+    setStatusError(null);
+    try {
+      await partnershipApi.updateStatus(partner._id, isActive ? 'Inactive' : 'Active', accessToken);
+      await onChanged();
+    } catch (err) {
+      setStatusError(errorMessage(err));
+    } finally {
+      setStatusPending(false);
+    }
+  };
 
   const summary = [
-    { label: 'Rev Share', value: partner.revShare, color: 'var(--color-warning)' },
-    { label: 'Monthly Fee', value: partner.monthlyFee, color: 'var(--color-danger)' },
-    { label: 'Bet Volume', value: partner.betVolume, color: 'var(--color-primary)' },
+    { label: 'Rev Share', value: formatRevShare(partner.revShare), color: 'var(--color-warning)' },
+    { label: 'Monthly Fee', value: formatMoney(partner.monthlyFee), color: 'var(--color-danger)' },
+    { label: 'Bet Volume', value: formatBetVolume(partner.betVolume), color: 'var(--color-primary)' },
   ];
 
   return (
@@ -50,8 +81,14 @@ export function PartnerDrawer({ partner, onEdit, onClose }: PartnerDrawerProps) 
           <Button variant="primary" size="xs" icon={<PencilIcon size={12} />} onClick={onEdit}>
             Edit
           </Button>
-          <Button className={styles.deactivate} size="xs" icon={<BanIcon size={12} />}>
-            Deactivate
+          <Button
+            className={isActive ? styles.deactivate : undefined}
+            size="xs"
+            disabled={statusPending}
+            icon={isActive ? <BanIcon size={12} /> : <CheckCircleIcon size={12} />}
+            onClick={toggleStatus}
+          >
+            {statusPending ? 'Saving…' : isActive ? 'Deactivate' : 'Activate'}
           </Button>
         </>
       }
@@ -59,10 +96,11 @@ export function PartnerDrawer({ partner, onEdit, onClose }: PartnerDrawerProps) 
         <div className={styles.identity}>
           <p className={styles.name}>{partner.name}</p>
           <div className={styles.meta}>
-            <Badge tone="brand">{partner.type}</Badge>
+            <Badge tone="brand">{partner.type || '—'}</Badge>
             <Badge tone={PARTNER_STATUS_TONE[partner.status]}>{partner.status}</Badge>
-            <span className={styles.since}>Since {partner.since}</span>
+            <span className={styles.since}>Since {formatSince(partner.since || partner.createdAt)}</span>
           </div>
+          {statusError ? <p className={styles.since}>{statusError}</p> : null}
 
           <div className={styles.summary}>
             {summary.map((tile) => (
@@ -83,20 +121,20 @@ export function PartnerDrawer({ partner, onEdit, onClose }: PartnerDrawerProps) 
       }
     >
       {tab === 'Overview' ? <OverviewTab partner={partner} /> : null}
-      {tab === 'Revenue' ? <RevenueTab /> : null}
-      {tab === 'Settings' ? <SettingsTab partner={partner} /> : null}
+      {tab === 'Revenue' ? <RevenueTab partner={partner} settlements={settlements} /> : null}
+      {tab === 'Settings' ? <SettingsTab key={partner.updatedAt} partner={partner} onChanged={onChanged} /> : null}
     </Drawer>
   );
 }
 
-function OverviewTab({ partner }: { partner: Partner }) {
+function OverviewTab({ partner }: { partner: ApiPartner }) {
   const details = [
-    { label: 'Partner ID', value: partner.id },
-    { label: 'Type', value: partner.type },
-    { label: 'Contact', value: partner.contact },
-    { label: 'Email', value: partner.email },
-    { label: 'Website', value: partner.website },
-    { label: 'Partner Since', value: partner.since },
+    { label: 'Partner ID', value: partner._id.slice(-6).toUpperCase() },
+    { label: 'Type', value: partner.type || '—' },
+    { label: 'Contact', value: partner.contact || '—' },
+    { label: 'Email', value: partner.email || '—' },
+    { label: 'Website', value: partner.website || '—' },
+    { label: 'Partner Since', value: formatSince(partner.since || partner.createdAt) },
   ];
 
   return (
@@ -112,68 +150,100 @@ function OverviewTab({ partner }: { partner: Partner }) {
 
       <div className={styles.apiCard}>
         <p className={styles.cardLabel}>API Key</p>
-        <p className={styles.apiKey}>{partner.apiKey}</p>
+        <p className={styles.apiKey}>{partner.apiKey || '—'}</p>
       </div>
 
       <div className={styles.notesCard}>
         <p className={styles.cardLabel}>Notes</p>
-        <p className={styles.notes}>{partner.notes}</p>
+        <p className={styles.notes}>{partner.notes || '—'}</p>
       </div>
     </div>
   );
 }
 
-function RevenueTab() {
-  const peak = Math.max(...REVENUE_MONTHS.map((month) => month.value));
+function RevenueTab({ partner, settlements }: { partner: ApiPartner; settlements: ApiPartnerSettlement[] }) {
+  const months = mapRevenueHistory(partner.revenueHistory);
+  const peak = Math.max(1, ...months.map((month) => month.value));
+  const partnerSettlements = settlementsForPartner(settlements, partner._id);
 
   return (
     <div className={styles.body}>
       <div className={styles.totalCard}>
-        <p className={styles.cardLabel}>Total Revenue Shared (6 months)</p>
-        <p className={styles.totalValue}>{REVENUE_TOTAL}</p>
+        <p className={styles.cardLabel}>Total Revenue Shared</p>
+        <p className={styles.totalValue}>{revenueTotal(partner.revenueHistory)}</p>
       </div>
 
       <section>
         <p className={styles.sectionTitle}>Monthly Revenue Share</p>
-        {/* Labelled column strip — a value above each bar, the month below. */}
-        <div className={styles.bars}>
-          {REVENUE_MONTHS.map((month) => (
-            <div key={month.month} className={styles.bar}>
-              <span className={styles.barValue}>{month.label}</span>
-              <div
-                className={styles.barFill}
-                style={{ height: `${(month.value / peak) * 70}px` }}
-              />
-              <span className={styles.barMonth}>{month.month}</span>
-            </div>
-          ))}
-        </div>
+        {months.length === 0 ? (
+          <p className={styles.notes}>No revenue recorded yet.</p>
+        ) : (
+          <div className={styles.bars}>
+            {months.map((month) => (
+              <div key={month.month} className={styles.bar}>
+                <span className={styles.barValue}>{month.label}</span>
+                <div className={styles.barFill} style={{ height: `${(month.value / peak) * 70}px` }} />
+                <span className={styles.barMonth}>{month.month}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section>
         <p className={styles.sectionTitle}>Settlement History</p>
-        {SETTLEMENTS.map((settlement) => (
-          <div key={settlement.period} className={styles.settlement}>
-            <span className={styles.settlementPeriod}>{settlement.period}</span>
-            <span className={styles.settlementAmount}>{settlement.amount}</span>
-            <Badge tone="success">{settlement.status}</Badge>
-          </div>
-        ))}
+        {partnerSettlements.length === 0 ? (
+          <p className={styles.notes}>No settlements yet.</p>
+        ) : (
+          partnerSettlements.map((settlement) => (
+            <div key={settlement.period} className={styles.settlement}>
+              <span className={styles.settlementPeriod}>{settlement.period}</span>
+              <span className={styles.settlementAmount}>{settlement.amount}</span>
+              <Badge tone={settlement.status === 'Paid' ? 'success' : 'warning'}>{settlement.status}</Badge>
+            </div>
+          ))
+        )}
       </section>
     </div>
   );
 }
 
-function SettingsTab({ partner }: { partner: Partner }) {
+function SettingsTab({ partner, onChanged }: { partner: ApiPartner; onChanged: () => void | Promise<void> }) {
+  const { accessToken } = useAuth();
   const [form, setForm] = useState({
     name: partner.name,
-    revShare: partner.revShare,
-    monthlyFee: partner.monthlyFee,
+    revShare: String(partner.revShare),
+    monthlyFee: String(partner.monthlyFee),
     email: partner.email,
   });
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const set = (key: keyof typeof form) => (value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
+
+  const save = async () => {
+    if (!accessToken) return;
+    setPending(true);
+    setError(null);
+    try {
+      await partnershipApi.updatePartner(
+        partner._id,
+        {
+          name: form.name.trim(),
+          revShare: Number(form.revShare) || 0,
+          monthlyFee: Number(form.monthlyFee) || 0,
+          email: form.email.trim(),
+        },
+        accessToken,
+      );
+      await onChanged();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setPending(false);
+    }
+  };
 
   return (
     <div className={styles.body}>
@@ -186,12 +256,14 @@ function SettingsTab({ partner }: { partner: Partner }) {
       <TextField
         label="Revenue Share"
         labelCase="caps"
+        type="number"
         value={form.revShare}
         onChange={(event) => set('revShare')(event.target.value)}
       />
       <TextField
         label="Monthly Fee"
         labelCase="caps"
+        type="number"
         value={form.monthlyFee}
         onChange={(event) => set('monthlyFee')(event.target.value)}
       />
@@ -203,8 +275,17 @@ function SettingsTab({ partner }: { partner: Partner }) {
         onChange={(event) => set('email')(event.target.value)}
       />
 
-      <Button variant="primary" size="sm" block icon={<CheckCircleIcon size={13.993} />}>
-        Save Settings
+      {error ? <p className={styles.notes}>{error}</p> : null}
+
+      <Button
+        variant="primary"
+        size="sm"
+        block
+        disabled={pending}
+        icon={<CheckCircleIcon size={13.993} />}
+        onClick={save}
+      >
+        {pending ? 'Saving…' : 'Save Settings'}
       </Button>
     </div>
   );

@@ -481,3 +481,55 @@
   font-size: var(--font-size-2xs);
   line-height: var(--line-height-2xs);
 }
+
+.kycDocs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.kycDoc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  text-decoration: none;
+}
+
+.kycDocImage {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+
+.kycDocFile {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.kycDocLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kycReason {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+}
