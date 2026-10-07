@@ -2,6 +2,7 @@ import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { ROLES, getRole } from '../config/roles';
 import type { RoleId } from '../config/roles';
 import { useAuth } from '../features/auth/authContext';
+import { ForgotPasswordPage } from '../features/auth/ForgotPasswordPage';
 import { LoginPage } from '../features/auth/LoginPage';
 import { PanelSection } from '../features/panel/PanelSection';
 import { PanelLayout } from '../layouts/PanelLayout/PanelLayout';
@@ -26,6 +27,12 @@ function LoginRoute() {
   return <LoginPage />;
 }
 
+function ForgotPasswordRoute() {
+  const { user } = useAuth();
+  if (user) return <Navigate to={getRole(user.roleId).basePath} replace />;
+  return <ForgotPasswordPage />;
+}
+
 function HomeRoute() {
   return <Navigate to={useHomePath()} replace />;
 }
@@ -35,6 +42,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginRoute />} />
+      <Route path="/forgot-password" element={<ForgotPasswordRoute />} />
 
       {ROLES.map((role) => (
         <Route key={role.id} element={<RequireRole roleId={role.id} />}>

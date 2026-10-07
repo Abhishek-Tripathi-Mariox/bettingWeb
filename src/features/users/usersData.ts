@@ -83,6 +83,8 @@ export const ACTIVITY_TITLE: Record<string, string> = {
   register: 'Registered',
   profile_updated: 'Profile Updated',
   password_changed: 'Password Changed',
+  password_reset_requested: 'Password Reset Requested',
+  password_reset: 'Password Reset',
   account_created: 'Account Created',
   account_updated: 'Account Updated',
   account_suspended: 'Account Suspended',

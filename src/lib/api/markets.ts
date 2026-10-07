@@ -85,6 +85,14 @@ export const marketsApi = {
     }),
 
   /** Settles every open bet on the market with `winner` and closes it for good. */
+  /** No result: open bets are voided and their stakes released. */
+  void: (id: string, reason: string, accessToken?: string | null) =>
+    apiRequest<{ market: ApiMarket; voided: number; released: number }>(`/markets/${id}/void`, {
+      method: 'POST',
+      body: { reason },
+      accessToken,
+    }),
+
   settle: (id: string, winner: string, accessToken?: string | null) =>
     apiRequest<{ market: ApiMarket; settled: number; won: number; lost: number }>(`/markets/${id}/settle`, {
       method: 'POST',

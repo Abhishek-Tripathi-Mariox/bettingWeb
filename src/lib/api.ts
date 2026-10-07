@@ -193,6 +193,13 @@ export const authApi = {
       body: payload,
       accessToken,
     }),
+
+  /** Emails a 6-digit reset code; the reply is the same whether or not the account exists. */
+  forgotPassword: (username: string) =>
+    request<{ message: string }>('/auth/forgot-password', { method: 'POST', body: { username } }),
+
+  resetPassword: (payload: { username: string; code: string; newPassword: string }) =>
+    request<{ message: string }>('/auth/reset-password', { method: 'POST', body: payload }),
 };
 
 export { request as apiRequest, API_BASE_URL };

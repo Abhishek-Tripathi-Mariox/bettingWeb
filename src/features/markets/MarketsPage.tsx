@@ -18,6 +18,8 @@ import { MarketFormModal } from './MarketFormModal';
 import { MARKET_STATUS_TONE, marketStats, marketTypeColor } from './marketsData';
 import styles from './MarketsPage.module.css';
 
+/** Settle-picker value for voiding the market instead of naming a winner. */
+const VOID = '__void__';
 const ALL_EVENTS = 'all';
 
 /** Market manager — node 112:5525. */
@@ -100,8 +102,13 @@ export function MarketsPage() {
     if (!accessToken || !settling?.winner) return;
     setRowPending(settling.id);
     try {
-      const res = await marketsApi.settle(settling.id, settling.winner, accessToken);
-      setNotice(`Settled on ${settling.winner}: ${res.settled} bets (${res.won} won, ${res.lost} lost).`);
+      if (settling.winner === VOID) {
+        const res = await marketsApi.void(settling.id, 'Match abandoned / no result', accessToken);
+        setNotice(`Market voided: ${res.voided} open bets returned (₹${res.released.toLocaleString('en-IN')} released).`);
+      } else {
+        const res = await marketsApi.settle(settling.id, settling.winner, accessToken);
+        setNotice(`Settled on ${settling.winner}: ${res.settled} bets (${res.won} won, ${res.lost} lost).`);
+      }
       setSettling(null);
       setReloadKey((key) => key + 1);
     } catch (err) {
@@ -168,7 +175,9 @@ export function MarketsPage() {
       key: 'status',
       header: 'Status',
       render: (row) =>
-        row.winner ? (
+        row.winner === 'Void' ? (
+          <Badge tone="warning">Void · stakes returned</Badge>
+        ) : row.winner ? (
           <Badge tone="info">Settled · {row.winner}</Badge>
         ) : (
           <Badge tone={MARKET_STATUS_TONE[row.status]}>{row.status}</Badge>
@@ -192,6 +201,7 @@ export function MarketsPage() {
                   {name}
                 </option>
               ))}
+              <option value={VOID}>Void — no result, return stakes</option>
             </select>
             <Button
               className={styles.enable}

@@ -69,6 +69,8 @@ const ACTIVITY_EMOJI: Record<string, string> = {
   register: '👤',
   profile_updated: '✏️',
   password_changed: '🔑',
+  password_reset_requested: '📧',
+  password_reset: '🔑',
   account_created: '🆕',
   account_suspended: '⛔',
   account_activated: '✅',

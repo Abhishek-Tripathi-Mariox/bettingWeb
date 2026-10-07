@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { BrandMark } from '../../components/ui/BrandMark/BrandMark';
 import { Button } from '../../components/ui/Button/Button';
 import { Card } from '../../components/ui/Card/Card';
@@ -13,17 +13,22 @@ import { ROLES, getRole } from '../../config/roles';
 import type { RoleId } from '../../config/roles';
 import { useAuth } from './authContext';
 import { RoleSelector } from './RoleSelector';
+import type { ResetDoneState } from './ForgotPasswordPage';
 import styles from './LoginPage.module.css';
 
 const DEFAULT_ROLE = ROLES[0];
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signIn } = useAuth();
+  // Set by ForgotPasswordPage after a successful reset.
+  const resetDone = location.state as ResetDoneState | null;
 
   const [roleId, setRoleId] = useState<RoleId>(DEFAULT_ROLE.id);
-  const [username, setUsername] = useState(DEFAULT_ROLE.demo.username);
-  const [password, setPassword] = useState(DEFAULT_ROLE.demo.password);
+  const [username, setUsername] = useState(resetDone?.resetUsername ?? DEFAULT_ROLE.demo.username);
+  const [password, setPassword] = useState(resetDone ? '' : DEFAULT_ROLE.demo.password);
+  const [notice, setNotice] = useState<string | null>(resetDone?.notice ?? null);
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -37,6 +42,7 @@ export function LoginPage() {
     setUsername(nextRole.demo.username);
     setPassword(nextRole.demo.password);
     setError(null);
+    setNotice(null);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -90,8 +96,19 @@ export function LoginPage() {
                 checked={remember}
                 onChange={(event) => setRemember(event.target.checked)}
               />
-              <Button variant="link">Forgot password?</Button>
+              <Button
+                variant="link"
+                onClick={() => navigate('/forgot-password', { state: { username: username.trim() } })}
+              >
+                Forgot password?
+              </Button>
             </div>
+
+            {notice && !error ? (
+              <p className={styles.notice} role="status">
+                {notice}
+              </p>
+            ) : null}
 
             {error ? (
               <p className={styles.alert} role="alert">
