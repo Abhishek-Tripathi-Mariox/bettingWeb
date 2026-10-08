@@ -1,3 +1,5 @@
+import { usePermissions } from '../auth/usePermissions';
+import { StaffAnalyticsPage, StaffEventsPage, StaffMarketsPage } from '../staff/StaffBettingPages';
 import { SectionCard } from '../../components/ui/SectionCard/SectionCard';
 import { getRole } from '../../config/roles';
 import type { NavItem } from '../../config/roles';
@@ -37,7 +39,29 @@ const PEOPLE_SEGMENTS = new Set(['users']);
  */
 export function PanelSection({ item }: { item: NavItem }) {
   const { user } = useAuth();
+  const { can, loaded } = usePermissions();
   const role = getRole(user!.roleId);
+  const isStaff = role.id !== 'super-admin';
+
+  // A hidden menu entry is still a URL: the Permissions page decides here too.
+  if (item.permission) {
+    if (!loaded) return <p className={styles.placeholder}>Loading…</p>;
+    if (!can(item.permission[0], item.permission[1], 'V')) {
+      return (
+        <SectionCard title={item.label} subtitle={`${role.label} · ${item.label}`} size="md">
+          <p className={styles.placeholder}>
+            Aapke role ({role.label}) ko “{item.label}” dekhne ki permission nahi hai. Super Admin isse Permissions page se
+            de sakta hai.
+          </p>
+        </SectionCard>
+      );
+    }
+  }
+
+  // Staff get read-only / downline-scoped versions of these admin pages.
+  if (isStaff && item.segment === 'events') return <StaffEventsPage />;
+  if (isStaff && item.segment === 'markets') return <StaffMarketsPage />;
+  if (isStaff && item.segment === 'analytics') return <StaffAnalyticsPage />;
 
   if (item.segment === '') return <DashboardView role={role} />;
 

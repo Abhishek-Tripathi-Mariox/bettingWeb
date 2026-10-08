@@ -120,6 +120,7 @@ export function MarketFormModal({ market, events, onClose, onCreate, onUpdate }:
           code: form.code.trim(),
           name: form.name.trim(),
           type: form.type,
+          status: form.status as ApiMarket['status'],
           runners: selections,
           maxBet,
           maxExposure,

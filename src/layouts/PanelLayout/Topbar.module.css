@@ -71,7 +71,7 @@
 
 .chipRole {
   gap: var(--space-3);
-  border-color: rgba(33, 150, 243, 0.25);
+  border-color: rgba(var(--color-primary-rgb), 0.25);
   background-color: var(--color-primary-tint);
   color: var(--color-primary);
   font-weight: var(--font-weight-semibold);
@@ -114,7 +114,7 @@
   justify-content: center;
   width: 35.999px;
   height: 35.999px;
-  border: 1.51px solid rgba(33, 150, 243, 0.4);
+  border: 1.51px solid rgba(var(--color-primary-rgb), 0.4);
   border-radius: var(--radius-pill);
   background-image: var(--gradient-brand);
   color: var(--color-text);

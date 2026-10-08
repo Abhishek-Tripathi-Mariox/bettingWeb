@@ -46,16 +46,14 @@ export function splitName(name: string): [string, string] {
 }
 
 /**
- * Fallback shown before the real signed-in account loads (or if it fails to)
- * — drawn from the static role config rather than a real account.
+ * What the profile shows before the real account loads (or if it fails to).
+ * Deliberately blank — never a made-up person the form could save over the real one.
  */
 export function getProfileIdentity(role: RoleDefinition) {
-  const [first, last] = splitName(role.operator);
   return {
-    first,
-    last,
-    name: role.operator,
-    email: `${first.toLowerCase()}@betmaster.com`,
+    first: '',
+    last: '',
+    name: 'Loading…',
     role: role.label,
     presence: 'Online',
   };

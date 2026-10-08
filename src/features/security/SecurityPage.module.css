@@ -141,7 +141,7 @@
   width: 35.999px;
   height: 35.999px;
   border-radius: var(--radius-md);
-  background-color: rgba(33, 150, 243, 0.12);
+  background-color: rgba(var(--color-primary-rgb), 0.12);
   color: var(--color-primary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
@@ -224,7 +224,7 @@
   width: 31.993px;
   height: 31.993px;
   border-radius: var(--radius-pill);
-  background-color: rgba(33, 150, 243, 0.1);
+  background-color: rgba(var(--color-primary-rgb), 0.1);
   color: var(--color-primary);
 }
 
@@ -390,4 +390,25 @@
   .policy {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Load / empty / result lines for the live tabs. */
+.error,
+.empty,
+.notice {
+  margin: var(--space-3) 0;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.empty {
+  color: var(--color-text-muted);
+}
+
+.notice {
+  color: var(--color-success);
 }

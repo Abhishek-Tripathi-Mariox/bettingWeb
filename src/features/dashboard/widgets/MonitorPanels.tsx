@@ -50,7 +50,7 @@ const ALERT_RGB: Record<RiskAlert['tone'], string> = {
 
 export function RiskAlertsPanel({ alerts }: { alerts: RiskAlert[] }) {
   return (
-    <SectionCard title="Risk Alerts" subtitle="Real-time monitoring" size="md" bodySpacing={20}>
+    <SectionCard title="Risk Alerts" subtitle="Current risk signals" size="md" bodySpacing={20}>
       <div className={styles.stack}>
         {alerts.map((alert) => (
           <article
@@ -75,11 +75,18 @@ export function RiskAlertsPanel({ alerts }: { alerts: RiskAlert[] }) {
   );
 }
 
-export function SystemHealthPanel({ metrics }: { metrics: HealthMetric[] }) {
+/** Badge for the backend's health.status ('Operational' / 'Degraded' / 'No providers'). */
+const HEALTH_BADGE: Record<string, { tone: 'success' | 'warning' | 'neutral'; label: string }> = {
+  Operational: { tone: 'success', label: 'All Systems OK' },
+  Degraded: { tone: 'warning', label: 'Degraded' },
+};
+
+export function SystemHealthPanel({ metrics, status }: { metrics: HealthMetric[]; status: string }) {
+  const badge = HEALTH_BADGE[status] ?? { tone: 'neutral' as const, label: status };
   return (
     <SectionCard
       title="System Health"
-      action={<Badge tone="success">All Systems OK</Badge>}
+      action={<Badge tone={badge.tone}>{badge.label}</Badge>}
       bodySpacing={16}
     >
       <div className={styles.healthGrid}>

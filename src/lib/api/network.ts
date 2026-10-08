@@ -221,6 +221,8 @@ export type DashboardAgent = {
 };
 
 export type MyDashboard = {
+  /** Parts held back by the Permissions page ('wallet' | 'bets' | 'commission'); their figures are null. */
+  restricted?: ('wallet' | 'bets' | 'commission')[];
   /** One row per agent under the caller — empty on an agent's own dashboard. */
   agents: DashboardAgent[];
   /** One row per super agent (the sum of its agents) — only a franchise has any. */
@@ -287,6 +289,24 @@ export const networkApi = {
   /** The signed-in account's own dashboard, scoped to its players. */
   myDashboard: (accessToken: string) => apiRequest<MyDashboard>('/network/dashboard', { accessToken }),
 
+  /** Staff: live & upcoming fixtures ("Events" view grant). */
+  events: (accessToken: string) => apiRequest<{ events: StaffEvent[] }>('/network/events', { accessToken }),
+
+  /** Staff: open markets with current prices ("Markets" view grant). */
+  markets: (accessToken: string, eventId?: string) =>
+    apiRequest<{ markets: StaffMarket[] }>(`/network/markets${eventId ? `?eventId=${eventId}` : ''}`, { accessToken }),
+
+  /** Staff: the caller's own downline over the last six months ("Analytics" view grant). */
+  analytics: (accessToken: string) => apiRequest<StaffAnalytics>('/network/analytics', { accessToken }),
+
+  /** Staff: void an open bet of one of their own players ("Void Bet" edit grant). */
+  voidBet: (accessToken: string, betId: string, reason?: string) =>
+    apiRequest<{ bet: { _id: string; status: string } }>(`/network/bets/${betId}/void`, {
+      method: 'POST',
+      body: reason ? { reason } : {},
+      accessToken,
+    }),
+
   list: (
     params: { role: NetworkRole; status?: 'active' | 'suspended'; kyc?: KycState; q?: string; page?: number; limit?: number },
     accessToken: string,
@@ -321,3 +341,33 @@ export const accountLabel = (ref: Pick<AccountRef, 'name' | 'username' | 'busine
 /** Display name: trading name for staff when set, else the person's name, else username. */
 export const displayName = (ref: Pick<AccountRef, 'name' | 'username' | 'businessName'> | null | undefined) =>
   ref ? ref.businessName || ref.name || ref.username : '—';
+
+export type StaffEvent = {
+  _id: string;
+  sport: string;
+  league: string;
+  name: string;
+  emoji: string;
+  status: 'Live' | 'Upcoming' | 'Suspended';
+  startTime: string;
+  provider?: string;
+  openMarkets: number;
+};
+
+export type StaffMarket = {
+  _id: string;
+  event: { _id: string; name: string; league: string; status: string; startTime: string };
+  name: string;
+  type: string;
+  maxBet: number;
+  runners: { name: string; odds: number; active: boolean }[];
+};
+
+type MonthPoint = { month: string; value: number };
+
+export type StaffAnalytics = {
+  totals: { players: number; bets: number; stake: number };
+  revenue: MonthPoint[];
+  volume: MonthPoint[];
+  signups: MonthPoint[];
+};

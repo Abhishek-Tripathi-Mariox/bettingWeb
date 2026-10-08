@@ -7,7 +7,9 @@ export function formatCount(value: number): string {
 }
 
 /** ₹ in Indian short scale — ₹1.42Cr, ₹18.4L, ₹42,600. */
-export function formatMoney(value: number): string {
+/** Figures a role isn't allowed to see arrive as null (see network.controller.js) and show as "—". */
+export function formatMoney(value: number | null | undefined): string {
+  if (value == null) return '—';
   const abs = Math.abs(value);
   if (abs >= 10_000_000) return `₹${trim(value / 10_000_000)}Cr`;
   if (abs >= 100_000) return `₹${trim(value / 100_000)}L`;
@@ -15,13 +17,15 @@ export function formatMoney(value: number): string {
 }
 
 /** ₹ with full digits — used in tables and ledgers. */
-export function formatMoneyExact(value: number): string {
+export function formatMoneyExact(value: number | null | undefined): string {
+  if (value == null) return '—';
   const sign = value > 0 ? '+' : value < 0 ? '-' : '';
   return `${sign}₹${INDIAN.format(Math.abs(Math.round(value)))}`;
 }
 
 /** ₹ with full digits and no "+" — balances, limits, stakes. Negative values keep their "-". */
-export function formatRupees(value: number): string {
+export function formatRupees(value: number | null | undefined): string {
+  if (value == null) return '—';
   return `${value < 0 ? '-' : ''}₹${INDIAN.format(Math.abs(Math.round(value)))}`;
 }
 

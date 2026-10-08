@@ -23,6 +23,8 @@ export type RiskTone = 'success' | 'warning' | 'danger' | 'live';
 
 export type ExposureRow = {
   id: string;
+  /** The market's event, for the View button (opens Markets on that event). */
+  eventId: string | null;
   emoji: string;
   market: string;
   /** Live marker beside the name — the pink dot in the design. */
@@ -35,12 +37,24 @@ export type ExposureRow = {
   level: RiskLevel;
 };
 
+export type RiskPanelItem = {
+  id: string;
+  text: string;
+  /** Extra line under the text (the rule's reason, or who's involved). */
+  detail?: string;
+  /** Which resolve call applies; absent for items that are reviewed elsewhere (wallet requests). */
+  resolve?: 'flag' | 'pattern';
+};
+
 export type RiskPanel = {
   title: string;
   count: string;
   tone: RiskTone;
-  items: string[];
+  items: RiskPanelItem[];
 };
+
+/** Items shown per panel before "+N more". */
+export const PANEL_ITEMS = 5;
 
 export const RISK_LEVEL_TONE: Record<RiskLevel, BadgeTone> = {
   Normal: 'success',
@@ -151,6 +165,7 @@ export function mapExposureRows(markets: ApiRiskMarket[]): ExposureRow[] {
     const level = levelOf(utilization);
     return {
       id: market._id,
+      eventId: eventOf(market)?._id ?? null,
       emoji: marketEmoji(market),
       market: marketLabel(market),
       live: level === 'Critical',
@@ -173,7 +188,12 @@ function mapFlaggedUsers(flaggedUsers: ApiFlaggedUser[]): RiskPanel {
     title: 'High Risk Users',
     count: formatCount(flaggedUsers.length),
     tone: 'danger',
-    items: flaggedUsers.slice(0, 3).map((item) => `${userLabel(item.user)} (Score: ${item.score})`),
+    items: flaggedUsers.slice(0, PANEL_ITEMS).map((item) => ({
+      id: item._id,
+      text: `${userLabel(item.user)} (Score: ${item.score})`,
+      detail: item.reason,
+      resolve: 'flag' as const,
+    })),
   };
 }
 
@@ -182,7 +202,12 @@ function mapPatterns(patterns: ApiSuspiciousPattern[]): RiskPanel {
     title: 'Suspicious Patterns',
     count: formatCount(patterns.length),
     tone: 'warning',
-    items: patterns.slice(0, 3).map((item) => item.description),
+    items: patterns.slice(0, PANEL_ITEMS).map((item) => ({
+      id: item._id,
+      text: `${item.severity}: ${item.description}`,
+      detail: item.relatedUsers.length ? item.relatedUsers.map(userLabel).join(', ') : undefined,
+      resolve: 'pattern' as const,
+    })),
   };
 }
 
@@ -195,9 +220,11 @@ function mapLargePending(requests: ApiLargePendingRequest[]): RiskPanel {
     title: 'Large Pending',
     count: formatCount(requests.length),
     tone: 'live',
-    items: requests
-      .slice(0, 3)
-      .map((item) => `${formatMoney(item.amount)} ${kindLabel(item.kind)}: ${userLabel(item.user)}`),
+    items: requests.slice(0, PANEL_ITEMS).map((item) => ({
+      id: item._id,
+      text: `${formatMoney(item.amount)} ${kindLabel(item.kind)}: ${userLabel(item.user)}`,
+      detail: 'Review it in Wallet',
+    })),
   };
 }
 

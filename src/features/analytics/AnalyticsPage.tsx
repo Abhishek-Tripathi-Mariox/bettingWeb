@@ -7,9 +7,10 @@ import { StatCard } from '../../components/ui/StatCard/StatCard';
 import { useAuth } from '../auth/authContext';
 import { ApiRequestError } from '../../lib/api';
 import { analyticsApi } from '../../lib/api/analytics';
+import type { AnalyticsGrowth } from '../../lib/api/analytics';
 import {
   ANALYTICS_DIMENSION_BY_TAB,
-  ANALYTICS_STATS,
+  analyticsStats,
   ANALYTICS_TABS,
   buildHighlightCards,
   toChartPoints,
@@ -34,6 +35,7 @@ export function AnalyticsPage() {
   const [seriesError, setSeriesError] = useState<string | null>(null);
 
   const [highlights, setHighlights] = useState<AnalyticsHighlightCard[]>([]);
+  const [growth, setGrowth] = useState<AnalyticsGrowth | null>(null);
   const [highlightsError, setHighlightsError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,6 +65,14 @@ export function AnalyticsPage() {
     if (!accessToken) return;
     let cancelled = false;
     analyticsApi
+      .growth(accessToken)
+      .then((res) => {
+        if (!cancelled) setGrowth(res.growth);
+      })
+      .catch(() => {
+        if (!cancelled) setGrowth(null);
+      });
+    analyticsApi
       .highlights(accessToken)
       .then((res) => {
         if (cancelled) return;
@@ -80,7 +90,7 @@ export function AnalyticsPage() {
   return (
     <div className={styles.page}>
       <div className={styles.stats}>
-        {ANALYTICS_STATS.map((stat) => (
+        {analyticsStats(growth).map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
       </div>

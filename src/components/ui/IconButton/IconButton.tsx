@@ -12,7 +12,7 @@ export type IconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'chi
 };
 
 const TONE_RGB: Record<IconButtonTone, string> = {
-  brand: '33, 150, 243',
+  brand: 'var(--color-primary-rgb)',
   warning: '250, 204, 21',
   danger: '239, 68, 68',
   success: '34, 197, 94',

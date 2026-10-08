@@ -2,7 +2,7 @@ import { BettingIcon, TargetIcon, TrendingUpIcon, UsersIcon } from '../../compon
 import type { ChartPoint } from '../../components/charts/AreaChart';
 import type { StatCardProps } from '../../components/ui/StatCard/StatCard';
 import { formatCount, formatMoney } from '../../lib/format';
-import type { AnalyticsDimension, AnalyticsHighlights, AnalyticsSeriesPoint } from '../../lib/api/analytics';
+import type { AnalyticsDimension, AnalyticsGrowth, AnalyticsHighlights, AnalyticsSeriesPoint } from '../../lib/api/analytics';
 
 /** A highlight card built from the live `/analytics/highlights` totals. */
 export type AnalyticsHighlightCard = {
@@ -12,25 +12,48 @@ export type AnalyticsHighlightCard = {
   rgb: string;
 };
 
-export const ANALYTICS_STATS: StatCardProps[] = [
-  {
-    label: 'Revenue Growth',
-    value: '+42.8%',
-    caption: 'vs last quarter',
-    icon: TrendingUpIcon,
-    accent: 'green',
-    tinted: true,
-  },
-  { label: 'User Growth', value: '+36.5%', caption: 'vs last quarter', icon: UsersIcon, accent: 'blue' },
-  { label: 'Bet Volume', value: '+28.4%', caption: 'vs last quarter', icon: BettingIcon, accent: 'cyan' },
-  {
-    label: 'Avg. Session',
-    value: '24.8 min',
-    caption: '+3.2 min vs last month',
-    icon: TargetIcon,
-    accent: 'yellow',
-  },
-];
+/** "+12.5%" for a change between two periods; "New" when there was nothing before, "—" when both are 0. */
+function change(current: number, previous: number): string {
+  if (previous === 0) return current === 0 ? '—' : 'New';
+  const pct = ((current - previous) / Math.abs(previous)) * 100;
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+}
+
+/** Headline cards from `/analytics/growth` — last 30 days vs the 30 days before. */
+export function analyticsStats(growth: AnalyticsGrowth | null): StatCardProps[] {
+  const dash = '—';
+  return [
+    {
+      label: 'Revenue Growth',
+      value: growth ? change(growth.revenue.current, growth.revenue.previous) : dash,
+      caption: growth ? `${formatMoney(growth.revenue.current)} in 30 days vs ${formatMoney(growth.revenue.previous)}` : 'Last 30 days',
+      icon: TrendingUpIcon,
+      accent: 'green',
+      tinted: true,
+    },
+    {
+      label: 'New Players',
+      value: growth ? change(growth.newPlayers.current, growth.newPlayers.previous) : dash,
+      caption: growth ? `${formatCount(growth.newPlayers.current)} joined in 30 days vs ${formatCount(growth.newPlayers.previous)}` : 'Last 30 days',
+      icon: UsersIcon,
+      accent: 'blue',
+    },
+    {
+      label: 'Bet Volume',
+      value: growth ? change(growth.betVolume.current, growth.betVolume.previous) : dash,
+      caption: growth ? `${formatMoney(growth.betVolume.current)} staked in 30 days vs ${formatMoney(growth.betVolume.previous)}` : 'Last 30 days',
+      icon: BettingIcon,
+      accent: 'cyan',
+    },
+    {
+      label: 'Active Players',
+      value: growth ? formatCount(growth.activePlayers) : dash,
+      caption: growth ? `Signed in within 30 days, of ${formatCount(growth.totalPlayers)} players` : 'Last 30 days',
+      icon: TargetIcon,
+      accent: 'yellow',
+    },
+  ];
+}
 
 export const ANALYTICS_TABS = ['Revenue', 'Users', 'Sports', 'Commission'] as const;
 

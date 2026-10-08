@@ -1,3 +1,4 @@
+import { useBranding } from '../../lib/brandingContext';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -8,7 +9,6 @@ import { Checkbox } from '../../components/ui/Checkbox/Checkbox';
 import { SectionLabel } from '../../components/ui/SectionLabel/SectionLabel';
 import { TextField } from '../../components/ui/TextField/TextField';
 import { LockIcon, LoginIcon, MailIcon } from '../../components/icons';
-import { APP } from '../../config/app';
 import { ROLES, getRole } from '../../config/roles';
 import type { RoleId } from '../../config/roles';
 import { useAuth } from './authContext';
@@ -19,6 +19,7 @@ import styles from './LoginPage.module.css';
 const DEFAULT_ROLE = ROLES[0];
 
 export function LoginPage() {
+  const { name: brandName, tagline, legal } = useBranding();
   const navigate = useNavigate();
   const location = useLocation();
   const { signIn } = useAuth();
@@ -63,8 +64,8 @@ export function LoginPage() {
       <div className={styles.container}>
         <header className={styles.header}>
           <BrandMark />
-          <h1 className={styles.title}>{APP.name}</h1>
-          <p className={styles.tagline}>{APP.tagline}</p>
+          <h1 className={styles.title}>{brandName}</h1>
+          <p className={styles.tagline}>{tagline}</p>
         </header>
 
         <Card className={styles.card} elevated>
@@ -130,7 +131,7 @@ export function LoginPage() {
           </form>
         </Card>
 
-        <p className={styles.footer}>{APP.legal}</p>
+        <p className={styles.footer}>{legal}</p>
       </div>
     </div>
   );

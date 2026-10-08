@@ -85,6 +85,7 @@ export const ACTIVITY_TITLE: Record<string, string> = {
   password_changed: 'Password Changed',
   password_reset_requested: 'Password Reset Requested',
   password_reset: 'Password Reset',
+  bet_voided: 'Bet Voided',
   account_created: 'Account Created',
   account_updated: 'Account Updated',
   account_suspended: 'Account Suspended',

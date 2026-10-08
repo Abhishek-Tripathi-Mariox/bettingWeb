@@ -36,71 +36,76 @@ function networkCaption(data: MyDashboard): string {
   return data.agents.length > 0 ? `Across ${plural(data.agents.length, 'agent')}` : 'Under my panel';
 }
 
+type Restricted = 'wallet' | 'bets' | 'commission';
+
 /** Agent dashboard — node 139:114739, every figure scoped to the agent's own players. */
 export function agentStats(data: MyDashboard): StatCardProps[] {
   const { stats, commissionRate } = data;
-  return [
-    {
+  // Cards for what the role may not see (Permissions page) are left out; their figures arrive as null.
+  const hidden = new Set(data.restricted ?? []);
+  const cards: [Restricted | null, () => StatCardProps][] = [
+    [null, () => ({
       label: 'My Total Users',
       value: formatCount(stats.totalUsers),
       caption: networkCaption(data),
       icon: UsersIcon,
       accent: 'blue',
-    },
-    {
+    })],
+    [null, () => ({
       label: 'Active Users',
       value: formatCount(stats.activeToday),
       caption: 'Placed bets today',
       ...delta(stats.activeToday, stats.activeYesterday, formatCount),
       icon: CheckCircleIcon,
       accent: 'green',
-    },
-    {
+    })],
+    ['wallet', () => ({
       label: 'My Wallet Balance',
       value: formatRupees(stats.walletBalance),
       caption: 'Available balance',
       icon: WalletIcon,
       accent: 'cyan',
-    },
-    {
+    })],
+    ['bets', () => ({
       label: "Today's Bets",
       value: formatCount(stats.todayBets),
       caption: `${formatMoney(stats.todayStake)} total stake`,
       ...delta(stats.todayBets, stats.yesterdayBets, formatCount),
       icon: BettingIcon,
       accent: 'yellow',
-    },
-    {
+    })],
+    ['commission', () => ({
       label: "Today's Commission",
       value: formatRupees(stats.todayCommission),
       caption: `${commissionRate}% of turnover`,
       ...delta(stats.todayCommission, stats.yesterdayCommission, formatRupees),
       icon: CommissionIcon,
       accent: 'green',
-    },
-    {
+    })],
+    [null, () => ({
       label: "Today's Revenue",
       value: formatRupees(stats.todayRevenue),
       caption: 'Net after payouts',
       ...delta(stats.todayRevenue, stats.yesterdayRevenue, formatRupees),
       icon: TrendingUpIcon,
       accent: 'blue',
-    },
-    {
+    })],
+    ['wallet', () => ({
       label: 'Pending Deposits',
       value: formatCount(stats.pendingDeposits.count),
       caption: `${formatRupees(stats.pendingDeposits.amount)} total`,
       icon: ArrowDownIcon,
       accent: 'yellow',
-    },
-    {
+    })],
+    ['wallet', () => ({
       label: 'Pending Withdrawals',
       value: formatCount(stats.pendingWithdrawals.count),
       caption: `${formatRupees(stats.pendingWithdrawals.amount)} total`,
       icon: ArrowUpIcon,
       accent: 'red',
-    },
+    })],
   ];
+  return cards.filter(([need]) => !need || !hidden.has(need)).map(([, card]) => card());
 }
 
 const share = (part: number, total: number) =>

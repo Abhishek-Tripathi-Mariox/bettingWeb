@@ -223,6 +223,17 @@ export function LiveWallet({ adminTools }: { adminTools: boolean }) {
 
   // Staff hold a wallet of their own (commission paid in, money moved down the network).
   const { can } = usePermissions();
+  const visibleTabs = TAB_LABELS.filter((label) => {
+    if (label === 'Payments') return adminTools;
+    if (label === 'Deposits') return can('finance', 'deposit', 'V');
+    if (label === 'Withdrawals') return can('finance', 'withdrawal', 'V');
+    if (label === 'History') return can('finance', 'deposit', 'V') || can('finance', 'withdrawal', 'V');
+    return true;
+  });
+  // A tab this role can't see (default / ?tab= link) falls back to the first one it can.
+  useEffect(() => {
+    if (visibleTabs.length && !visibleTabs.includes(tab)) setTab(visibleTabs[0]);
+  }, [visibleTabs, tab]);
   const canTransfer = !adminTools && can('finance', 'fundTransfer', 'X');
   const [myBalance, setMyBalance] = useState<number | null>(null);
   const [transferring, setTransferring] = useState(false);
@@ -371,8 +382,10 @@ export function LiveWallet({ adminTools }: { adminTools: boolean }) {
     return type ? [{ id: user._id, label: userLabel(user), type }] : [];
   });
 
-  const showActions = tab === 'Deposits' || tab === 'Withdrawals';
-  const tabs = TAB_LABELS.filter((label) => adminTools || label !== 'Payments').map((label) => {
+  // The queues follow the Permissions page: Deposit / Withdrawal (view) to see each, (edit) to decide.
+  const reviewKind = tab === 'Deposits' ? 'deposit' : tab === 'Withdrawals' ? 'withdrawal' : null;
+  const showActions = reviewKind !== null && can('finance', reviewKind, 'X');
+  const tabs = visibleTabs.map((label) => {
     if (label === 'Deposits' && stats?.pendingDeposits)
       return {
         label,

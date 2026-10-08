@@ -27,15 +27,15 @@ const TRANSACTION_COLUMNS: Column<TransactionRow>[] = [
   },
 ];
 
-export function TransactionsPanel({ rows }: { rows: TransactionRow[] }) {
+export function TransactionsPanel({ rows, onRefresh }: { rows: TransactionRow[]; onRefresh?: () => void }) {
   return (
     <SectionCard
       title="Recent Transactions"
-      subtitle="Last 30 minutes"
+      subtitle="Latest 10 ledger entries"
       size="md"
       bodySpacing={20}
       action={
-        <Button variant="quiet" size="xs" icon={<RefreshIcon size={12} />}>
+        <Button variant="quiet" size="xs" icon={<RefreshIcon size={12} />} onClick={onRefresh}>
           Refresh
         </Button>
       }
@@ -62,16 +62,16 @@ const BET_COLUMNS: Column<BetRow>[] = [
   },
 ];
 
-export function RecentBetsPanel({ rows }: { rows: BetRow[] }) {
+export function RecentBetsPanel({ rows, onRefresh }: { rows: BetRow[]; onRefresh?: () => void }) {
   return (
     <SectionCard
       title="Recent Bets"
-      subtitle="Last 30 minutes — open positions"
+      subtitle="Latest 10 bets, any status"
       size="md"
       bodySpacing={20}
       action={
-        <Button variant="quiet" size="xs" icon={<RefreshIcon size={12} />}>
-          Live
+        <Button variant="quiet" size="xs" icon={<RefreshIcon size={12} />} onClick={onRefresh}>
+          Refresh
         </Button>
       }
     >
@@ -82,7 +82,7 @@ export function RecentBetsPanel({ rows }: { rows: BetRow[] }) {
 
 export function ActivityFeedPanel({ entries }: { entries: ActivityEntry[] }) {
   return (
-    <SectionCard title="Activity Feed" subtitle="Real-time platform events" size="md" bodySpacing={20}>
+    <SectionCard title="Activity Feed" subtitle="Latest platform events" size="md" bodySpacing={20}>
       <div>
         {entries.map((entry) => (
           <article key={entry.id} className={styles.feedRow}>

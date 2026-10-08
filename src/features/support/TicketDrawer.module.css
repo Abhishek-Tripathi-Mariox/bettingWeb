@@ -168,14 +168,14 @@
 
 .viewProfile {
   flex: none;
-  border-color: rgba(33, 150, 243, 0.2);
-  background-color: rgba(33, 150, 243, 0.1);
+  border-color: rgba(var(--color-primary-rgb), 0.2);
+  background-color: rgba(var(--color-primary-rgb), 0.1);
   color: var(--color-primary);
   font-weight: var(--font-weight-semibold);
 }
 
 .viewProfile:hover {
-  background-color: rgba(33, 150, 243, 0.18);
+  background-color: rgba(var(--color-primary-rgb), 0.18);
   color: var(--color-primary);
 }
 
@@ -289,8 +289,8 @@
 }
 
 .bubbleSupport {
-  border-color: rgba(33, 150, 243, 0.15);
-  background-color: rgba(33, 150, 243, 0.08);
+  border-color: rgba(var(--color-primary-rgb), 0.15);
+  background-color: rgba(var(--color-primary-rgb), 0.08);
 }
 
 /* Reply ---------------------------------------------------------------- */

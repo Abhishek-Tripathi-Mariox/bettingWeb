@@ -226,10 +226,13 @@ export function AgentDashboard() {
         </SectionCard>
       ) : null}
 
-      <div className={styles.split}>
-        <SectionCard title="My Commission (7 Days)" subtitle={`Estimated at ${data.commissionRate}% of daily stake`} size="md">
-          <BarChart data={commissionWeek(data)} series={COMMISSION_SERIES} formatValue={rupeesCompact} />
-        </SectionCard>
+      <div className={data.restricted?.includes('commission') ? undefined : styles.split}>
+        {/* Commission and the ledger follow the Permissions page (held back by the server when not granted). */}
+        {data.restricted?.includes('commission') ? null : (
+          <SectionCard title="My Commission (7 Days)" subtitle={`Estimated at ${data.commissionRate}% of daily stake`} size="md">
+            <BarChart data={commissionWeek(data)} series={COMMISSION_SERIES} formatValue={rupeesCompact} />
+          </SectionCard>
+        )}
 
         <SectionCard title="Recent Activity" size="md">
           {data.activity.length === 0 ? (
@@ -250,31 +253,33 @@ export function AgentDashboard() {
         </SectionCard>
       </div>
 
-      <SectionCard title="Recent Transactions" size="md">
-        {data.transactions.length === 0 ? (
-          <p className={styles.feedTime}>No transactions from your users yet.</p>
-        ) : (
-          <ul className={styles.txns}>
-            {data.transactions.map((txn) => (
-              <li key={txn.id} className={styles.txn}>
-                <div className={styles.txnText}>
-                  <p className={styles.txnUser}>{txn.user}</p>
-                  <p className={styles.txnMeta}>
-                    {[txn.type, txn.method, formatRelativeTime(txn.at)].filter(Boolean).join(' · ')}
-                  </p>
-                </div>
-                <div className={styles.txnAmount}>
-                  <p className={cx(styles.amount, styles[txn.amount >= 0 ? 'in' : 'out'])}>
-                    {txn.amount >= 0 ? '+' : '-'}
-                    {formatRupees(Math.abs(txn.amount))}
-                  </p>
-                  <Badge tone={TXN_TONE[txn.status] ?? 'neutral'}>{txn.status === 'Completed' ? 'Success' : txn.status}</Badge>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </SectionCard>
+      {data.restricted?.includes('wallet') ? null : (
+        <SectionCard title="Recent Transactions" size="md">
+          {data.transactions.length === 0 ? (
+            <p className={styles.feedTime}>No transactions from your users yet.</p>
+          ) : (
+            <ul className={styles.txns}>
+              {data.transactions.map((txn) => (
+                <li key={txn.id} className={styles.txn}>
+                  <div className={styles.txnText}>
+                    <p className={styles.txnUser}>{txn.user}</p>
+                    <p className={styles.txnMeta}>
+                      {[txn.type, txn.method, formatRelativeTime(txn.at)].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <div className={styles.txnAmount}>
+                    <p className={cx(styles.amount, styles[txn.amount >= 0 ? 'in' : 'out'])}>
+                      {txn.amount >= 0 ? '+' : '-'}
+                      {formatRupees(Math.abs(txn.amount))}
+                    </p>
+                    <Badge tone={TXN_TONE[txn.status] ?? 'neutral'}>{txn.status === 'Completed' ? 'Success' : txn.status}</Badge>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+      )}
     </div>
   );
 }

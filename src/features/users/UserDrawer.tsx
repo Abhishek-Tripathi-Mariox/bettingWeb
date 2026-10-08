@@ -1,3 +1,4 @@
+import { usePermissions } from '../auth/usePermissions';
 import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import {
@@ -62,6 +63,14 @@ export function UserDrawer({ accountId, defaultTab = 'Overview', showAgent = fal
   const { accessToken } = useAuth();
   const { detail, error, setError, reload: load } = useNetworkDetail(accountId);
   const [tab, setTab] = useState<Tab>(defaultTab);
+  const { can } = usePermissions();
+  // Tabs follow the Permissions page: View Bets, Wallet Balance (ledger) and KYC Details.
+  const visibleTabs = TABS.filter(
+    (name) =>
+      (name !== 'Bets' || can('bettingMarkets', 'viewBets', 'V')) &&
+      (name !== 'Transactions' || can('finance', 'walletBalance', 'V')) &&
+      (name !== 'Kyc' || can('userManagement', 'kycDetails', 'V')),
+  );
   const [pending, setPending] = useState(false);
   const [editing, setEditing] = useState(false);
 
@@ -115,7 +124,7 @@ export function UserDrawer({ accountId, defaultTab = 'Overview', showAgent = fal
           </div>
         </div>
       }
-      tabs={<Tabs items={TABS} value={tab} variant="underline" aria-label="User sections" onChange={setTab} />}
+      tabs={<Tabs items={visibleTabs} value={tab} variant="underline" aria-label="User sections" onChange={setTab} />}
     >
       {error ? <p className={styles.empty}>{error}</p> : null}
 
@@ -168,7 +177,20 @@ export function UserDrawer({ accountId, defaultTab = 'Overview', showAgent = fal
         </div>
       ) : null}
 
-      {tab === 'Bets' ? <BetsTab bets={detail.bets} total={detail.summary.bets} /> : null}
+      {tab === 'Bets' ? (
+        <BetsTab
+          bets={detail.bets}
+          total={detail.summary.bets}
+          onVoid={
+            can('bettingMarkets', 'voidBet', 'X') && accessToken
+              ? (bet) => {
+                  const reason = window.prompt(`Void this ₹${bet.amount} bet? The stake goes back to the player.\nReason (optional):`);
+                  if (reason !== null) void run(() => networkApi.voidBet(accessToken, bet._id, reason.trim() || undefined));
+                }
+              : undefined
+          }
+        />
+      ) : null}
 
       {tab === 'Transactions' ? (
         <div className={styles.list}>
@@ -285,7 +307,16 @@ const marketName = (bet: DetailBet) =>
 
 const BET_TONE = { Pending: 'info', Won: 'success', Lost: 'danger', Void: 'neutral' } as const;
 
-export function BetsTab({ bets, total }: { bets: DetailBet[]; total: number }) {
+export function BetsTab({
+  bets,
+  total,
+  onVoid,
+}: {
+  bets: DetailBet[];
+  total: number;
+  /** Shown on open bets when the role holds "Void Bet" (edit). */
+  onVoid?: (bet: DetailBet) => void;
+}) {
   return (
     <div>
       <div className={styles.sectionHead}>
@@ -318,6 +349,11 @@ export function BetsTab({ bets, total }: { bets: DetailBet[]; total: number }) {
                 <span>Odds: {bet.odds.toFixed(2)}</span>
                 <span>Stake: {formatRupees(bet.amount)}</span>
                 <Badge tone={BET_TONE[bet.status]}>{bet.status === 'Pending' ? 'Open' : bet.status}</Badge>
+                {onVoid && bet.status === 'Pending' ? (
+                  <button type="button" className={styles.voidBet} onClick={() => onVoid(bet)}>
+                    Void
+                  </button>
+                ) : null}
               </div>
             </article>
           );

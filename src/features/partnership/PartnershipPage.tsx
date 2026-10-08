@@ -126,7 +126,7 @@ export function PartnershipPage() {
   return (
     <div className={styles.page}>
       <div className={styles.stats}>
-        {partnerStats(partners).map((stat) => (
+        {partnerStats(partners, settlements).map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
       </div>

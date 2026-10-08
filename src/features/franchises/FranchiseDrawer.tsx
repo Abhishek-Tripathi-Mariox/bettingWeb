@@ -1,3 +1,4 @@
+import { usePermissions } from '../auth/usePermissions';
 import { useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import {
@@ -52,6 +53,7 @@ export function FranchiseDrawer({
   onChanged?: () => void;
   onClose: () => void;
 }) {
+  const { can } = usePermissions();
   const { accessToken } = useAuth();
   const { detail, error, setError, reload } = useNetworkDetail(accountId);
   const [tab, setTab] = useState('Overview');
@@ -71,6 +73,8 @@ export function FranchiseDrawer({
   const title = account.businessName || account.name || account.username;
   const status = statusLabel(account);
   const tabs = ['Overview', `Super Agents (${downline.superAgents.total})`, 'Wallet', 'Settings'] as const;
+  // The Wallet tab is the network's ledger: "Wallet Balance" (view).
+  const shownTabs = tabs.filter((name) => name !== 'Wallet' || can('finance', 'walletBalance', 'V'));
 
   const changed = async () => {
     await reload();
@@ -132,7 +136,7 @@ export function FranchiseDrawer({
             </>
           ) : undefined
         }
-        tabs={<Tabs items={tabs} value={tab} variant="underline" aria-label="Franchise sections" onChange={setTab} />}
+        tabs={<Tabs items={shownTabs} value={tab} variant="underline" aria-label="Franchise sections" onChange={setTab} />}
       >
         {error ? <p className={styles.placeholder}>{error}</p> : null}
 

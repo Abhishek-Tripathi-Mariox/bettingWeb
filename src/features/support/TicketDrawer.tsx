@@ -203,33 +203,40 @@ export function TicketDrawer({ ticketId, onChanged, onClose }: TicketDrawerProps
           </div>
         </section>
 
-        <section className={styles.panel}>
-          <p className={styles.panelTitle}>Reply</p>
-          <div className={styles.reply}>
-            <TextAreaField
-              className={styles.replyBox}
-              label="Reply"
-              aria-label="Reply"
-              placeholder="Type your reply..."
-              value={reply}
-              onChange={(event) => setReply(event.target.value)}
-            />
-          </div>
-          <div className={styles.replyActions}>
-            <Button className={styles.clear} size="xs" disabled={pending} onClick={() => setReply('')}>
-              Clear
-            </Button>
-            <Button
-              variant="primary"
-              size="xs"
-              icon={<SendIcon size={12} />}
-              disabled={pending || !reply.trim()}
-              onClick={sendReply}
-            >
-              {pending ? 'Sending…' : 'Send Reply'}
-            </Button>
-          </div>
-        </section>
+        {ticket.status === 'Closed' ? (
+          <section className={styles.panel}>
+            <p className={styles.panelTitle}>Reply</p>
+            <p className={styles.panelTitle}>This ticket is closed. Reopen it to reply.</p>
+          </section>
+        ) : (
+          <section className={styles.panel}>
+            <p className={styles.panelTitle}>Reply</p>
+            <div className={styles.reply}>
+              <TextAreaField
+                className={styles.replyBox}
+                label="Reply"
+                aria-label="Reply"
+                placeholder="Type your reply..."
+                value={reply}
+                onChange={(event) => setReply(event.target.value)}
+              />
+            </div>
+            <div className={styles.replyActions}>
+              <Button className={styles.clear} size="xs" disabled={pending} onClick={() => setReply('')}>
+                Clear
+              </Button>
+              <Button
+                variant="primary"
+                size="xs"
+                icon={<SendIcon size={12} />}
+                disabled={pending || !reply.trim()}
+                onClick={sendReply}
+              >
+                {pending ? 'Sending…' : 'Send Reply'}
+              </Button>
+            </div>
+          </section>
+        )}
       </div>
     </Drawer>
   );

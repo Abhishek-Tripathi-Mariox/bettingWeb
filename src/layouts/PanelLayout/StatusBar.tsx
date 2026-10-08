@@ -1,10 +1,11 @@
+import { useBranding } from '../../lib/brandingContext';
 import { Dot } from '../../components/ui/Dot/Dot';
-import { APP } from '../../config/app';
 import styles from './StatusBar.module.css';
 import { formatUptime, usePlatformStatus } from './usePlatformStatus';
 
 /** Bottom status strip: live health metrics on the left, build stamp on the right. */
 export function StatusBar({ clock }: { clock: string }) {
+  const { build } = useBranding();
   const health = usePlatformStatus();
   const connected = health?.status === 'ok';
 
@@ -24,7 +25,7 @@ export function StatusBar({ clock }: { clock: string }) {
         ) : null}
       </div>
       <span className={styles.build}>
-        {APP.build} · IST {clock}
+        {build} · IST {clock}
       </span>
     </footer>
   );

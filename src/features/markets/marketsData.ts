@@ -17,6 +17,7 @@ export const MARKET_STATUS_TONE: Record<MarketStatus, BadgeTone> = {
  * falls back to a neutral grey rather than being rejected.
  */
 const MARKET_TYPE_RGB: Record<string, string> = {
+  'Match Odds': '139, 92, 246',
   Winner: '33, 150, 243',
   'Over Under': '41, 182, 246',
   Fancy: '250, 204, 21',
@@ -45,12 +46,12 @@ export function marketStats(markets: ApiMarket[]): StatCardProps[] {
     {
       label: 'Active Markets',
       value: formatCount(active),
-      caption: 'Across live events',
+      caption: 'Open for betting',
       icon: MarketsIcon,
       accent: 'blue',
       tinted: true,
     },
-    { label: 'Total Bets', value: formatCount(totalBets), caption: 'Open positions', icon: ActivityIcon, accent: 'cyan' },
+    { label: 'Total Bets', value: formatCount(totalBets), caption: 'Placed, all time', icon: ActivityIcon, accent: 'cyan' },
     { label: 'Total Exposure', value: formatMoney(totalExposure), caption: 'Across all markets', icon: RiskIcon, accent: 'red' },
     { label: 'Suspended', value: formatCount(suspended), caption: 'Need review', icon: BanIcon, accent: 'yellow' },
   ];

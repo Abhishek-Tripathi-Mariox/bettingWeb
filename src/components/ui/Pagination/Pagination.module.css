@@ -49,7 +49,7 @@
 
 .active,
 .active:hover {
-  background-color: rgba(33, 150, 243, 0.2);
+  background-color: rgba(var(--color-primary-rgb), 0.2);
   color: var(--color-primary);
   font-weight: var(--font-weight-bold);
 }

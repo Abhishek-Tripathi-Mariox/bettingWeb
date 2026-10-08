@@ -27,7 +27,7 @@
   width: 44px;
   height: 44px;
   border-radius: var(--radius-pill);
-  background-color: rgba(33, 150, 243, 0.2);
+  background-color: rgba(var(--color-primary-rgb), 0.2);
   color: var(--color-primary);
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-extrabold);
@@ -67,9 +67,9 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  border: 1px solid rgba(33, 150, 243, 0.25);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.25);
   border-radius: var(--radius-tile);
-  background-color: rgba(33, 150, 243, 0.07);
+  background-color: rgba(var(--color-primary-rgb), 0.07);
   padding: var(--space-4) var(--space-6);
 }
 
@@ -88,7 +88,7 @@
   width: 34px;
   height: 34px;
   border-radius: var(--radius-md);
-  background-color: rgba(33, 150, 243, 0.18);
+  background-color: rgba(var(--color-primary-rgb), 0.18);
   color: var(--color-primary);
 }
 
@@ -108,7 +108,7 @@
 .tier {
   flex: none;
   border-radius: 20px;
-  background-color: rgba(33, 150, 243, 0.12);
+  background-color: rgba(var(--color-primary-rgb), 0.12);
   padding: var(--space-1) 10px;
   color: var(--color-primary);
   font-size: var(--font-size-2xs);

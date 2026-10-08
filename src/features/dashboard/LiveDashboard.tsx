@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useLiveRefresh } from '../../lib/realtime';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIcon,
   ArrowDownIcon,
@@ -242,8 +243,9 @@ export function LiveDashboard() {
   const [extras, setExtras] = useState<Extras>({ wallet: null, risk: null, commission: [], deposits: [], withdrawals: [] });
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!accessToken) return;
+  /** Fetches the dashboard and its secondary figures; the panels' Refresh buttons call it again. */
+  const load = useCallback(() => {
+    if (!accessToken) return () => {};
     let cancelled = false;
     dashboardApi
       .get(accessToken)
@@ -276,6 +278,10 @@ export function LiveDashboard() {
       cancelled = true;
     };
   }, [accessToken]);
+
+  useEffect(() => load(), [load]);
+  // Live: bets, ledger and match changes refresh the dashboard (at most every 5 s).
+  useLiveRefresh(['matches:changed', 'admin:changed'], () => load(), 5000);
 
   if (!data) {
     return (
@@ -326,14 +332,14 @@ export function LiveDashboard() {
         <LiveMatchesPanel matches={mapMatches(data)} />
         <div className={styles.column}>
           <RiskAlertsPanel alerts={mapRiskAlerts(data)} />
-          <SystemHealthPanel metrics={mapHealth(data)} />
+          <SystemHealthPanel metrics={mapHealth(data)} status={data.health.status} />
         </div>
       </div>
 
-      <TransactionsPanel rows={mapTransactions(data)} />
+      <TransactionsPanel rows={mapTransactions(data)} onRefresh={load} />
 
       <div className={styles.wide}>
-        <RecentBetsPanel rows={mapBets(data)} />
+        <RecentBetsPanel rows={mapBets(data)} onRefresh={load} />
         <ActivityFeedPanel entries={mapActivity(data)} />
       </div>
     </div>

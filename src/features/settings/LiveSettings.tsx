@@ -14,7 +14,7 @@ import { Button } from '../../components/ui/Button/Button';
 import { Meter } from '../../components/ui/ProgressBar/ProgressBar';
 import { PillTabs } from '../../components/ui/PillTabs/PillTabs';
 import { TextField } from '../../components/ui/TextField/TextField';
-import { APP } from '../../config/app';
+import { useBranding } from '../../lib/brandingContext';
 import { useAuth } from '../auth/authContext';
 import { ApiRequestError } from '../../lib/api';
 import { settingsApi } from '../../lib/api/settings';
@@ -53,11 +53,17 @@ export function LiveSettings() {
     };
   }, [accessToken]);
 
+  const { brand, initial: brandInitial, refresh: refreshBranding } = useBranding();
+
   const saveSection: SaveSection = async (section, values) => {
     if (!accessToken) return;
     // The backend replaces the whole section, so merge onto what's stored to keep untouched keys.
-    const res = await settingsApi.updateSection(section, { ...(settings?.[section] ?? {}), ...values }, accessToken);
+    // Brand is merged (and validated) server-side, so only this card's fields go up.
+    const payload = section === 'brand' ? values : { ...(settings?.[section] ?? {}), ...values };
+    const res = await settingsApi.updateSection(section, payload, accessToken);
     setSettings(res.settings);
+    // The panel wears the brand: re-read it so the new colours / name / logo show at once.
+    if (section === 'brand') await refreshBranding();
   };
 
   if (!settings) {
@@ -131,7 +137,11 @@ export function LiveSettings() {
             subtitle: 'Logo, colors and platform name',
             leading: (
               <div className={styles.upload}>
-                <span className={styles.logoMark}>{APP.initial}</span>
+                {brand.logoUrl ? (
+                  <img className={styles.logoMark} src={brand.logoUrl} alt="Current logo" style={{ objectFit: 'cover' }} />
+                ) : (
+                  <span className={styles.logoMark}>{brandInitial}</span>
+                )}
               </div>
             ),
           })}

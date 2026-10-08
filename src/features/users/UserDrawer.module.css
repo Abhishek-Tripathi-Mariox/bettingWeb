@@ -360,7 +360,7 @@
   justify-content: center;
   width: 27.999px;
   height: 27.999px;
-  border: 1.51px solid rgba(33, 150, 243, 0.3);
+  border: 1.51px solid rgba(var(--color-primary-rgb), 0.3);
   border-radius: var(--radius-pill);
   background-color: var(--color-primary-tint);
   color: var(--color-primary);
@@ -532,4 +532,15 @@
   background: transparent;
   color: var(--color-text);
   font: inherit;
+}
+
+/* "Void" on an open bet (Void Bet permission). */
+.voidBet {
+  border: var(--hairline) solid rgba(239, 68, 68, 0.4);
+  border-radius: var(--radius-sm);
+  background: none;
+  padding: 1px 8px;
+  color: var(--color-danger);
+  font-size: var(--font-size-2xs);
+  cursor: pointer;
 }

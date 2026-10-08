@@ -23,7 +23,11 @@ export type ApiMarket = {
   maxExposure: number;
   status: ApiMarketStatus;
   /** Backable selections; empty = the event's two sides at back / lay odds. */
-  runners?: { name: string; odds: number }[];
+  runners?: { name: string; odds: number; active?: boolean }[];
+  /** Feed markets (Diamond): prices and status come from the feed, so they aren't edited by hand. */
+  externalId?: string | null;
+  /** Last raw answer from the feed's result endpoint, while the market waits for a result. */
+  lastResult?: string;
   /** Set once the market is settled. */
   winner?: string | null;
   settledAt?: string | null;
@@ -100,7 +104,11 @@ export const marketsApi = {
       accessToken,
     }),
 
-  /** Bulk-suspends every Active market. Response is `{ modifiedCount }` — see market.service.js#suspendAll. */
-  suspendAll: (accessToken?: string | null) =>
-    apiRequest<{ modifiedCount: number }>('/markets/suspend-all', { method: 'POST', accessToken }),
+  /** Bulk-suspends Active markets — one event's, or every one when `eventId` is omitted. Response is `{ modifiedCount }`. */
+  suspendAll: (accessToken?: string | null, eventId?: string) =>
+    apiRequest<{ modifiedCount: number }>('/markets/suspend-all', {
+      method: 'POST',
+      body: eventId ? { eventId } : {},
+      accessToken,
+    }),
 };

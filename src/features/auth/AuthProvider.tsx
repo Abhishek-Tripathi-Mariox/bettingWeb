@@ -1,3 +1,4 @@
+import { closeRealtime } from '../../lib/realtime';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { RoleId } from '../../config/roles';
@@ -76,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Best-effort: the local session is cleared regardless.
       });
     }
+    closeRealtime();
     setUser(null);
     setAccessToken(null);
     setRefreshToken(null);

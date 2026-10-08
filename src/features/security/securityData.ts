@@ -1,126 +1,123 @@
-import { AlertTriangleIcon, BanIcon, FingerprintIcon, LockIcon } from '../../components/icons';
+import { AlertTriangleIcon, LockIcon, LoginIcon, UsersIcon } from '../../components/icons';
 import type { BadgeTone } from '../../components/ui/Badge/Badge';
 import type { StatCardProps } from '../../components/ui/StatCard/StatCard';
+import type { AuditLogEntry, SecurityStats } from '../../lib/api/security';
+import { formatCount } from '../../lib/format';
+import { ACTIVITY_TITLE } from '../users/usersData';
 
-export type LogStatus = 'Success' | 'Failed';
+export const SECURITY_TABS = ['Logs', 'Sessions', 'Audit', 'Policy'] as const;
 
-export type SecurityLog = {
-  id: string;
-  user: string;
-  action: string;
-  ip: string;
-  device: string;
-  time: string;
-  status: LogStatus;
+/** The audit actions the Logs tab shows: sign-ins and password events. */
+export const LOGIN_ACTIONS = [
+  'login_success',
+  'login_failed',
+  'logout',
+  'register',
+  'password_changed',
+  'password_reset_requested',
+  'password_reset',
+];
+
+export const LOG_STATUS_TONE: Record<AuditLogEntry['status'], BadgeTone> = {
+  success: 'success',
+  failed: 'danger',
 };
 
-export type Session = {
-  id: string;
-  name: string;
-  role: string;
-  device: string;
-  location: string;
-  ip: string;
-  duration: string;
-  /** The viewer's own session — tinted green and not revocable. */
-  own?: boolean;
-};
+export function securityStats(stats: SecurityStats | null): StatCardProps[] {
+  const failedDelta = stats ? stats.failedLogins - stats.failedLoginsPrev : 0;
+  return [
+    {
+      label: 'Active Sessions',
+      value: stats ? formatCount(stats.activeSessions) : '—',
+      caption: 'Signed-in devices',
+      icon: LockIcon,
+      accent: 'green',
+    },
+    {
+      label: 'Signed-in Users',
+      value: stats ? formatCount(stats.activeUsers) : '—',
+      caption: 'Accounts with a live session',
+      icon: UsersIcon,
+      accent: 'blue',
+    },
+    {
+      label: 'Failed Logins',
+      value: stats ? formatCount(stats.failedLogins) : '—',
+      caption: 'Last 24 hours',
+      delta: stats ? `${failedDelta >= 0 ? '+' : ''}${failedDelta} vs previous 24h` : undefined,
+      // Neutral on purpose: StatCard paints 'up' green, and more failed logins is not good news.
+      tone: 'flat',
+      icon: AlertTriangleIcon,
+      accent: 'yellow',
+    },
+    {
+      label: 'Successful Logins',
+      value: stats ? formatCount(stats.logins) : '—',
+      caption: 'Last 24 hours',
+      icon: LoginIcon,
+      accent: 'cyan',
+    },
+  ];
+}
 
-export type AuditEntry = {
-  id: string;
-  actor: string;
-  description: string;
-  time: string;
-  category: string;
-  ip: string;
-};
+/** Who did it: the account name, or the username a failed sign-in tried. */
+export function actorLabel(entry: AuditLogEntry): string {
+  if (entry.actor) return entry.actor.name || entry.actor.username;
+  const tried = typeof entry.metadata?.username === 'string' ? entry.metadata.username : '';
+  return entry.actorUsername || (tried ? `${tried} (unknown)` : 'Unknown');
+}
 
-export type WhitelistEntry = {
-  ip: string;
-  label: string;
-  added: string;
-  status: 'Active' | 'Blocked';
-};
+/** "Password Reset → franchise01 · grant EV" — a one-line summary for the audit trail. */
+export function describeAudit(entry: AuditLogEntry): string {
+  const title = ACTIVITY_TITLE[entry.action] ?? entry.action.replace(/_/g, ' ');
+  const target =
+    entry.target && entry.target._id !== entry.actor?._id ? ` → ${entry.target.name || entry.target.username}` : '';
+  const meta = entry.metadata ?? {};
+  const extras = [
+    typeof meta.amount === 'number' ? `₹${meta.amount.toLocaleString('en-IN')}` : null,
+    typeof meta.roleKey === 'string' ? `${meta.roleKey} · ${meta.groupKey}.${meta.permissionKey} = ${meta.grant || 'off'}` : null,
+    typeof meta.revoked === 'number' ? `${meta.revoked} sessions` : null,
+    typeof meta.reason === 'string' ? `Reason: ${meta.reason}` : null,
+  ].filter(Boolean);
+  return `${title}${target}${extras.length ? ` · ${extras.join(' · ')}` : ''}`;
+}
 
-export type SecurityToggle = {
-  title: string;
-  description: string;
-  on: boolean;
-  /** Track colour when on — the design varies it per row. */
-  color: string;
-};
+/** Audit category badge, from the action's prefix. */
+export function auditCategory(action: string): string {
+  if (/^(login|logout|register|password|session)/.test(action)) return 'Auth';
+  if (/^account/.test(action)) return 'Accounts';
+  if (/^permission/.test(action)) return 'Permissions';
+  if (/^kyc/.test(action)) return 'KYC';
+  if (/^(deposit|withdrawal)/.test(action)) return 'Wallet';
+  return 'Profile';
+}
 
-export const SECURITY_STATS: StatCardProps[] = [
-  { label: 'Active Sessions', value: '248', caption: 'Logged in users', icon: LockIcon, accent: 'green' },
-  {
-    label: 'Failed Logins',
-    value: '42',
-    caption: 'Last 24 hours',
-    delta: '+8 today vs yesterday',
-    tone: 'up',
-    icon: AlertTriangleIcon,
-    accent: 'yellow',
-  },
-  { label: 'Blocked IPs', value: '12', icon: BanIcon, accent: 'red' },
-  { label: '2FA Enabled', value: '84%', caption: 'Of active users', icon: FingerprintIcon, accent: 'blue' },
+/**
+ * What the server actually enforces today (backend/src/routes/auth.routes.js,
+ * config/env.js). Read-only: none of these is configurable from the panel yet.
+ */
+export const ENFORCED_POLICY = [
+  { label: 'Minimum password length', value: '6 characters' },
+  { label: 'Sign-in attempts', value: '20 per 15 minutes per IP (then blocked)' },
+  { label: 'Access token lifetime', value: '15 minutes (renewed automatically)' },
+  { label: 'Session lifetime', value: '30 days, or until signed out / revoked' },
+  { label: 'Password change', value: 'Signs out every other device' },
+  { label: 'Password reset code', value: '6 digits, valid 10 minutes, 5 wrong tries' },
 ];
 
-export const SECURITY_TABS = ['Logs', 'Sessions', 'Audit', 'IP Whitelist', 'Settings'] as const;
-
-export const LOG_STATUS_TONE: Record<LogStatus, BadgeTone> = {
-  Success: 'success',
-  Failed: 'danger',
-};
-
-/** Logs tab — node 112:10472. */
-export const SECURITY_LOGS: SecurityLog[] = [
-  { id: 'L1', user: 'Super Admin', action: 'Login', ip: '103.21.48.92', device: 'Chrome / Windows', time: '10:42 AM', status: 'Success' },
-  { id: 'L2', user: 'Franchise F001', action: 'Login', ip: '182.74.92.11', device: 'Safari / macOS', time: '10:38 AM', status: 'Success' },
-  { id: 'L3', user: 'Unknown', action: 'Login Attempt', ip: '192.168.1.104', device: 'Bot / Linux', time: '10:31 AM', status: 'Failed' },
-  { id: 'L4', user: 'Unknown', action: 'Login Attempt', ip: '192.168.1.104', device: 'Bot / Linux', time: '10:29 AM', status: 'Failed' },
-  { id: 'L5', user: 'Agent A042', action: 'Withdrawal Request', ip: '117.209.43.21', device: 'Android / Chrome', time: '10:24 AM', status: 'Success' },
-  { id: 'L6', user: 'Super Admin', action: 'User Suspended', ip: '103.21.48.92', device: 'Chrome / Windows', time: '10:18 AM', status: 'Success' },
-  { id: 'L7', user: 'Franchise F002', action: 'Login', ip: '98.42.10.81', device: 'Firefox / Windows', time: '10:10 AM', status: 'Success' },
-];
-
-/** Sessions tab — node 119:56949. */
-export const SESSIONS: Session[] = [
-  { id: 'S1', name: 'Ankit Sharma', role: 'Super Admin', device: 'Chrome / Windows', location: 'Mumbai', ip: '103.21.48.92', duration: '2h 14m active', own: true },
-  { id: 'S2', name: 'Rajesh Mehta', role: 'Franchise', device: 'Safari / iPhone', location: 'Delhi', ip: '182.74.92.11', duration: '48m active' },
-  { id: 'S3', name: 'Deepak Kumar', role: 'Agent', device: 'Chrome / Android', location: 'Pune', ip: '117.209.43.21', duration: '1h 8m active' },
-  { id: 'S4', name: 'Suresh Sharma', role: 'Franchise', device: 'Firefox / Windows', location: 'Delhi', ip: '98.42.10.81', duration: '22m active' },
-];
-
-/** Audit tab — node 119:57459. */
-export const AUDIT_TRAIL: AuditEntry[] = [
-  { id: 'A1', actor: 'Super Admin', description: 'Suspended user U003 (Rahul Verma)', time: '10:18 AM today', category: 'User Management', ip: '103.21.48.92' },
-  { id: 'A2', actor: 'Super Admin', description: 'Approved withdrawal WIT4818 ₹1,00,000', time: '09:42 AM today', category: 'Wallet', ip: '103.21.48.92' },
-  { id: 'A3', actor: 'Super Admin', description: 'Updated betting limit: Max bet ₹5L → ₹10L', time: '09:30 AM today', category: 'Settings', ip: '103.21.48.92' },
-  { id: 'A4', actor: 'Franchise F001', description: 'Created agent A-092 (Anand Mishra)', time: '08:48 AM today', category: 'Agent Management', ip: '182.74.92.11' },
-  { id: 'A5', actor: 'Super Admin', description: 'Suspended market MKT005 (1st Innings Score)', time: '08:24 AM today', category: 'Markets', ip: '103.21.48.92' },
-  { id: 'A6', actor: 'Super Admin', description: 'Published announcement: IPL 2024 Special Odds', time: 'Yesterday 4:12 PM', category: 'CMS', ip: '103.21.48.92' },
-];
-
-/** IP Whitelist tab — node 119:58016. */
-export const WHITELIST: WhitelistEntry[] = [
-  { ip: '103.21.48.92', label: 'Super Admin Office', added: '1 Jan 2024', status: 'Active' },
-  { ip: '182.74.92.11', label: 'Franchise F001 HQ', added: '15 Jan 2024', status: 'Active' },
-  { ip: '192.168.1.104', label: 'BLOCKED — Brute Force', added: '21 Jul 2024', status: 'Blocked' },
-  { ip: '98.42.10.81', label: 'Franchise F002 Office', added: '5 Mar 2024', status: 'Active' },
-  { ip: '117.209.43.21', label: 'Agent Office Mumbai', added: '20 Apr 2024', status: 'Active' },
-];
-
-/** Settings tab — node 119:58582. Each toggle carries its own on-colour. */
-export const SECURITY_TOGGLES: SecurityToggle[] = [
-  { title: 'Two-Factor Authentication', description: 'Require 2FA for all admin roles', on: true, color: 'var(--color-primary)' },
-  { title: 'IP Whitelist Enforcement', description: 'Block all non-whitelisted IPs', on: false, color: 'var(--color-primary)' },
-  { title: 'Session Timeout (30 min)', description: 'Auto-logout after 30 min idle', on: true, color: 'var(--color-warning)' },
-  { title: 'Login Alerts (Email)', description: 'Email alert on each new login', on: true, color: 'var(--color-primary-light)' },
-];
-
-export const PASSWORD_POLICY = [
-  { label: 'Minimum Length', value: '12 characters' },
-  { label: 'Password Expiry', value: '90 days' },
-  { label: 'Max Login Attempts', value: '5 attempts' },
-  { label: 'Lockout Duration', value: '30 minutes' },
-];
+export const toCsv = (entries: AuditLogEntry[]) =>
+  [
+    ['Time', 'Actor', 'Role', 'Action', 'Details', 'Status', 'IP', 'Device'],
+    ...entries.map((entry) => [
+      new Date(entry.createdAt).toISOString(),
+      actorLabel(entry),
+      entry.actor?.role ?? '',
+      entry.action,
+      describeAudit(entry),
+      entry.status,
+      entry.ip,
+      entry.userAgent,
+    ]),
+  ]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n');

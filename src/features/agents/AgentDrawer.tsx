@@ -1,3 +1,4 @@
+import { usePermissions } from '../auth/usePermissions';
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
@@ -53,6 +54,7 @@ export function AgentDrawer({
   onChanged?: () => void;
   onClose: () => void;
 }) {
+  const { can } = usePermissions();
   const { accessToken } = useAuth();
   const { detail, error, setError, reload } = useNetworkDetail(accountId);
   const [tab, setTab] = useState<Tab>('Overview');
@@ -131,7 +133,7 @@ export function AgentDrawer({
       }
       tabs={
         <Tabs
-          items={TABS}
+          items={TABS.filter((name) => (name !== 'Wallet' && name !== 'Transactions') || can('finance', 'walletBalance', 'V'))}
           value={tab}
           variant="underline"
           accent="var(--color-success)"

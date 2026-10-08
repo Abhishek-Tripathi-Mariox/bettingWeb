@@ -17,6 +17,13 @@ export type ApiEvent = {
   stake: number;
   exposure: number;
   createdBy: string | null;
+  /** 'diamond' for fixtures from the odds feed (prices and status sync automatically), else 'manual'. */
+  provider?: string;
+  externalId?: string | null;
+  hasStream?: boolean;
+  /** Feed matches: embeddable live score card and video (match/event detail responses only). */
+  scoreUrl?: string | null;
+  streamUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -35,7 +42,7 @@ export type ApiEventBet = {
   selection: string;
   odds: number;
   amount: number;
-  status: 'Pending' | 'Won' | 'Lost' | 'Void';
+  status: 'Pending' | 'Won' | 'Lost' | 'Void' | 'Cashed Out';
   placedAt: string;
   createdAt: string;
   updatedAt: string;

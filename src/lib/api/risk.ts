@@ -46,6 +46,8 @@ export type ApiFlaggedUser = {
   score: number;
   reason: string;
   active: boolean;
+  /** Detection rule that raised it, e.g. 'win-rate', 'cash-cycling' (riskDetection.service.js). */
+  rule?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -57,7 +59,10 @@ export type ApiSuspiciousPattern = {
   severity: 'Low' | 'Medium' | 'High';
   detectedAt: string;
   resolved: boolean;
+  key?: string;
 };
+
+export type ApiRiskScanResult = { newFlags: number; newPatterns: number; checkedFlags: number; checkedPatterns: number };
 
 export type ApiLargePendingRequest = {
   _id: string;
@@ -84,6 +89,16 @@ export const riskApi = {
     apiRequest<{ markets: ApiRiskMarket[] }>('/risk/exposure', { accessToken }),
 
   panels: (accessToken?: string | null) => apiRequest<ApiRiskPanels>('/risk/panels', { accessToken }),
+
+  /** Runs the detection rules now; returns what was new plus the refreshed panels. */
+  scan: (accessToken?: string | null) =>
+    apiRequest<ApiRiskPanels & { result: ApiRiskScanResult }>('/risk/scan', { method: 'POST', accessToken }),
+
+  resolveFlag: (id: string, accessToken?: string | null) =>
+    apiRequest<{ flagged: ApiFlaggedUser }>(`/risk/flagged/${id}/resolve`, { method: 'PATCH', accessToken }),
+
+  resolvePattern: (id: string, accessToken?: string | null) =>
+    apiRequest<{ pattern: ApiSuspiciousPattern }>(`/risk/patterns/${id}/resolve`, { method: 'PATCH', accessToken }),
 
   suspendExposure: (marketId: string, accessToken?: string | null) =>
     apiRequest<{ market: ApiRiskMarket }>(`/risk/exposure/${marketId}/suspend`, {

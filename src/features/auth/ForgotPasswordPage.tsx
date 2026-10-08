@@ -1,3 +1,4 @@
+import { useBranding } from '../../lib/brandingContext';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -7,7 +8,6 @@ import { Card } from '../../components/ui/Card/Card';
 import { SectionLabel } from '../../components/ui/SectionLabel/SectionLabel';
 import { TextField } from '../../components/ui/TextField/TextField';
 import { HashIcon, KeyIcon, LockIcon, MailIcon, SendIcon } from '../../components/icons';
-import { APP } from '../../config/app';
 import { authApi } from '../../lib/api';
 import styles from './LoginPage.module.css';
 
@@ -19,6 +19,7 @@ export type ResetDoneState = { resetUsername: string; notice: string };
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : 'Something went wrong');
 
 export function ForgotPasswordPage() {
+  const { name: brandName, tagline, legal } = useBranding();
   const navigate = useNavigate();
   const location = useLocation();
   const initialUsername = (location.state as { username?: string } | null)?.username ?? '';
@@ -94,8 +95,8 @@ export function ForgotPasswordPage() {
       <div className={styles.container}>
         <header className={styles.header}>
           <BrandMark />
-          <h1 className={styles.title}>{APP.name}</h1>
-          <p className={styles.tagline}>{APP.tagline}</p>
+          <h1 className={styles.title}>{brandName}</h1>
+          <p className={styles.tagline}>{tagline}</p>
         </header>
 
         <Card className={styles.card} elevated>
@@ -213,7 +214,7 @@ export function ForgotPasswordPage() {
           </div>
         </Card>
 
-        <p className={styles.footer}>{APP.legal}</p>
+        <p className={styles.footer}>{legal}</p>
       </div>
     </div>
   );

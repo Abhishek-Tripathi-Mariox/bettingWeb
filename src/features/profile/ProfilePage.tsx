@@ -1,3 +1,4 @@
+import { usePermissions } from '../auth/usePermissions';
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
 import { CheckCircleIcon } from '../../components/icons';
@@ -31,7 +32,14 @@ import styles from './ProfilePage.module.css';
 /** Account profile — node 112:11449 plus its six other tab states. */
 export function ProfilePage({ role }: { role: RoleDefinition }) {
   const { accessToken, setTokens, setDisplayName } = useAuth();
-  const tabs = getProfileTabs(role);
+  const { can } = usePermissions();
+  // Staff follow the Permissions page: Edit Profile (edit), Change Password (edit), Wallet Balance (view).
+  const canEditProfile = can('accountSettings', 'editProfile', 'X');
+  const tabs = getProfileTabs(role).filter(
+    (item) =>
+      (item.label !== 'Change Password' || can('accountSettings', 'changePassword', 'X')) &&
+      (item.label !== 'Wallet Activity' || can('finance', 'walletBalance', 'V')),
+  );
   const [tab, setTab] = useState<string>(tabs[0].label);
   const [overview, setOverview] = useState<MyProfile | null>(null);
   const [overviewVersion, setOverviewVersion] = useState(0);
@@ -106,7 +114,7 @@ export function ProfilePage({ role }: { role: RoleDefinition }) {
                 {fallback.presence}
               </span>
             </div>
-            <ChangePhotoButton accessToken={accessToken} disabled={!user} onUpdated={setUser} />
+            <ChangePhotoButton accessToken={accessToken} disabled={!user || !canEditProfile} onUpdated={setUser} />
           </div>
         </section>
 
@@ -145,6 +153,7 @@ export function ProfilePage({ role }: { role: RoleDefinition }) {
             role={role}
             user={user}
             accessToken={accessToken}
+            canEdit={canEditProfile}
             onSaved={(saved) => {
               setUser(saved);
               setDisplayName(saved.name);
@@ -165,6 +174,7 @@ export function ProfilePage({ role }: { role: RoleDefinition }) {
             key={overview ? 'loaded' : 'pending'}
             saved={overview?.preferences ?? {}}
             accessToken={accessToken}
+            canEdit={canEditProfile}
           />
         ) : null}
       </div>
@@ -254,11 +264,14 @@ function EditProfileTab({
   role,
   user,
   accessToken,
+  canEdit = true,
   onSaved,
 }: {
   role: RoleDefinition;
   user: ApiUser | null;
   accessToken: string | null;
+  /** Edit Profile (edit) on the Permissions page. */
+  canEdit?: boolean;
   onSaved: (user: ApiUser) => void;
 }) {
   const fallback = getProfileIdentity(role);
@@ -319,7 +332,8 @@ function EditProfileTab({
           variant="primary"
           size="sm"
           icon={<CheckCircleIcon size={13.993} />}
-          disabled={pending || !accessToken}
+          disabled={pending || !accessToken || !user || !canEdit}
+          title={canEdit ? undefined : 'Aapke role ko profile edit karne ki permission nahi hai.'}
           onClick={handleSave}
         >
           {pending ? 'Saving…' : 'Save Profile'}
@@ -615,7 +629,15 @@ function DevicesTab({
 }
 
 /** Preferences tab — node 139:113915, saved on the account. */
-function PreferencesTab({ saved, accessToken }: { saved: Record<string, boolean>; accessToken: string | null }) {
+function PreferencesTab({
+  saved,
+  accessToken,
+  canEdit = true,
+}: {
+  saved: Record<string, boolean>;
+  accessToken: string | null;
+  canEdit?: boolean;
+}) {
   const [prefs, setPrefs] = useState(() =>
     Object.fromEntries(PROFILE_PREFERENCES.map((item) => [item.label, saved[item.label] ?? item.on])),
   );
@@ -651,8 +673,9 @@ function PreferencesTab({ saved, accessToken }: { saved: Record<string, boolean>
         ))}
       </ul>
       {message ? <p className={styles.prefLabel}>{message}</p> : null}
+      {canEdit ? null : <p className={styles.prefLabel}>Aapke role ko profile edit karne ki permission nahi hai.</p>}
       <div className={styles.actions}>
-        <Button variant="primary" size="sm" disabled={pending} icon={<CheckCircleIcon size={13.993} />} onClick={save}>
+        <Button variant="primary" size="sm" disabled={pending || !canEdit} icon={<CheckCircleIcon size={13.993} />} onClick={save}>
           {pending ? 'Saving…' : 'Save Preferences'}
         </Button>
       </div>

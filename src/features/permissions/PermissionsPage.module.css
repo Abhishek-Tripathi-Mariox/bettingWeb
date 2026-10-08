@@ -280,3 +280,19 @@
     padding-right: var(--space-5);
   }
 }
+
+/* Load / save feedback. */
+.status {
+  margin-bottom: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-sm);
+}
+
+.statusError {
+  color: var(--color-danger);
+}
+
+.statusOk {
+  color: var(--color-success);
+}

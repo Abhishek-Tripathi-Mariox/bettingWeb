@@ -23,7 +23,8 @@ function useClock(): string {
     const id = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(id);
   }, []);
-  return now.toLocaleTimeString('en-IN', { hour12: true });
+  // Always India time — the status bar labels it IST whatever the browser's zone is.
+  return now.toLocaleTimeString('en-IN', { hour12: true, timeZone: 'Asia/Kolkata' });
 }
 
 /**

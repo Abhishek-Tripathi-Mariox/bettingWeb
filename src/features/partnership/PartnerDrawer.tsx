@@ -63,6 +63,7 @@ export function PartnerDrawer({ partner, settlements, onEdit, onChanged, onClose
   };
 
   const summary = [
+    { label: 'Players', value: String(partner.playerCount ?? 0), color: 'var(--color-success)' },
     { label: 'Rev Share', value: formatRevShare(partner.revShare), color: 'var(--color-warning)' },
     { label: 'Monthly Fee', value: formatMoney(partner.monthlyFee), color: 'var(--color-danger)' },
     { label: 'Bet Volume', value: formatBetVolume(partner.betVolume), color: 'var(--color-primary)' },
@@ -121,7 +122,7 @@ export function PartnerDrawer({ partner, settlements, onEdit, onChanged, onClose
       }
     >
       {tab === 'Overview' ? <OverviewTab partner={partner} /> : null}
-      {tab === 'Revenue' ? <RevenueTab partner={partner} settlements={settlements} /> : null}
+      {tab === 'Revenue' ? <RevenueTab partner={partner} settlements={settlements} onChanged={onChanged} /> : null}
       {tab === 'Settings' ? <SettingsTab key={partner.updatedAt} partner={partner} onChanged={onChanged} /> : null}
     </Drawer>
   );
@@ -129,6 +130,7 @@ export function PartnerDrawer({ partner, settlements, onEdit, onChanged, onClose
 
 function OverviewTab({ partner }: { partner: ApiPartner }) {
   const details = [
+    { label: 'Sign-up Code', value: partner.referralCode || '—' },
     { label: 'Partner ID', value: partner._id.slice(-6).toUpperCase() },
     { label: 'Type', value: partner.type || '—' },
     { label: 'Contact', value: partner.contact || '—' },
@@ -148,6 +150,15 @@ function OverviewTab({ partner }: { partner: ApiPartner }) {
         ))}
       </div>
 
+      <div className={styles.notesCard}>
+        <p className={styles.cardLabel}>How players join</p>
+        <p className={styles.notes}>
+          Players who enter {partner.referralCode || 'this partner’s code'} as the referral code at sign-up are linked to
+          this partner. Their bets build its volume, and {formatRevShare(partner.revShare)} of the house&apos;s net win
+          from them is its monthly revenue share.
+        </p>
+      </div>
+
       <div className={styles.apiCard}>
         <p className={styles.cardLabel}>API Key</p>
         <p className={styles.apiKey}>{partner.apiKey || '—'}</p>
@@ -161,7 +172,33 @@ function OverviewTab({ partner }: { partner: ApiPartner }) {
   );
 }
 
-function RevenueTab({ partner, settlements }: { partner: ApiPartner; settlements: ApiPartnerSettlement[] }) {
+function RevenueTab({
+  partner,
+  settlements,
+  onChanged,
+}: {
+  partner: ApiPartner;
+  settlements: ApiPartnerSettlement[];
+  onChanged: () => void | Promise<void>;
+}) {
+  const { accessToken } = useAuth();
+  const [paying, setPaying] = useState<string | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+
+  const pay = async (id: string, period: string, amount: string) => {
+    if (!accessToken || !window.confirm(`Mark ${amount} for ${period} as paid to ${partner.name}?`)) return;
+    setPaying(id);
+    setPayError(null);
+    try {
+      await partnershipApi.paySettlement(id, accessToken);
+      await onChanged();
+    } catch (err) {
+      setPayError(errorMessage(err));
+    } finally {
+      setPaying(null);
+    }
+  };
+
   const months = mapRevenueHistory(partner.revenueHistory);
   const peak = Math.max(1, ...months.map((month) => month.value));
   const partnerSettlements = settlementsForPartner(settlements, partner._id);
@@ -192,14 +229,26 @@ function RevenueTab({ partner, settlements }: { partner: ApiPartner; settlements
 
       <section>
         <p className={styles.sectionTitle}>Settlement History</p>
+        {payError ? <p className={styles.notes}>{payError}</p> : null}
         {partnerSettlements.length === 0 ? (
-          <p className={styles.notes}>No settlements yet.</p>
+          <p className={styles.notes}>No settlements yet — one is created for each finished month with a share to pay.</p>
         ) : (
           partnerSettlements.map((settlement) => (
-            <div key={settlement.period} className={styles.settlement}>
+            <div key={settlement.id} className={styles.settlement}>
               <span className={styles.settlementPeriod}>{settlement.period}</span>
               <span className={styles.settlementAmount}>{settlement.amount}</span>
-              <Badge tone={settlement.status === 'Paid' ? 'success' : 'warning'}>{settlement.status}</Badge>
+              {settlement.status === 'Pending' ? (
+                <Button
+                  variant="primary"
+                  size="xs"
+                  disabled={paying !== null}
+                  onClick={() => void pay(settlement.id, settlement.period, settlement.amount)}
+                >
+                  {paying === settlement.id ? 'Saving…' : 'Mark Paid'}
+                </Button>
+              ) : (
+                <Badge tone="success">Paid</Badge>
+              )}
             </div>
           ))
         )}

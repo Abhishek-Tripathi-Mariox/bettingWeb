@@ -46,6 +46,7 @@ const BET_STATUS_TONE: Record<ApiEventBet['status'], BadgeTone> = {
   Won: 'success',
   Lost: 'danger',
   Void: 'neutral',
+  'Cashed Out': 'info',
 };
 
 export function eventStats(events: ApiEvent[], markets: ApiMarket[]): StatCardProps[] {
@@ -60,7 +61,7 @@ export function eventStats(events: ApiEvent[], markets: ApiMarket[]): StatCardPr
     {
       label: 'Active Markets',
       value: formatCount(activeMarkets),
-      caption: 'Across live events',
+      caption: 'Open for betting',
       icon: ActivityIcon,
       accent: 'blue',
     },

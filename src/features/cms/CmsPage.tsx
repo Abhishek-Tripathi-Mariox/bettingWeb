@@ -139,7 +139,9 @@ export function CmsPage() {
                       size="xs"
                       aria-label={`Delete ${item.title}`}
                       disabled={deletingId === item._id}
-                      onClick={() => handleDelete(item._id)}
+                      onClick={() => {
+                        if (window.confirm(`Delete "${item.title}"? This can't be undone.`)) void handleDelete(item._id);
+                      }}
                     >
                       <TrashIcon size={12} />
                     </Button>

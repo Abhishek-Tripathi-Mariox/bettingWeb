@@ -21,9 +21,10 @@ export type PartnerStatus = ApiPartnerStatus;
 
 export type RevenueMonth = { month: string; label: string; value: number };
 
-export type Settlement = { period: string; amount: string; status: 'Pending' | 'Paid' };
+export type Settlement = { id: string; period: string; amount: string; status: 'Pending' | 'Paid' };
 
-export const PARTNER_TABS = ['Partners', 'Revenue', 'Config'] as const;
+/** Revenue and settlements live in each partner's drawer. */
+export const PARTNER_TABS = ['Partners'] as const;
 
 export const PARTNER_TYPES: PartnerType[] = [
   'Data Provider',
@@ -61,13 +62,11 @@ export function formatRevShare(revShare: number): string {
  * "SLA", so the fourth card — "Active SLAs" in the original static preview —
  * becomes "Active Partners", a real count instead of a fabricated one.
  */
-export function partnerStats(partners: ApiPartner[]): StatCardProps[] {
+export function partnerStats(partners: ApiPartner[], settlements: ApiPartnerSettlement[] = []): StatCardProps[] {
   const active = partners.filter((partner) => partner.status === 'Active');
   const monthlyFees = partners.reduce((sum, partner) => sum + partner.monthlyFee, 0);
-  const latestRevenue = partners.reduce((sum, partner) => {
-    const last = partner.revenueHistory[partner.revenueHistory.length - 1];
-    return sum + (last?.value ?? 0);
-  }, 0);
+  const paid = settlements.filter((s) => s.status === 'Paid').reduce((sum, s) => sum + s.amount, 0);
+  const due = settlements.filter((s) => s.status === 'Pending').reduce((sum, s) => sum + s.amount, 0);
 
   return [
     {
@@ -81,8 +80,8 @@ export function partnerStats(partners: ApiPartner[]): StatCardProps[] {
     { label: 'Partner Costs', value: formatMoney(monthlyFees), caption: 'Monthly fees', icon: DollarIcon, accent: 'red' },
     {
       label: 'Revenue Share Paid',
-      value: formatMoney(latestRevenue),
-      caption: 'Latest month, all partners',
+      value: formatMoney(paid),
+      caption: due > 0 ? `${formatMoney(due)} still due` : 'All settlements paid',
       icon: TrendingUpIcon,
       accent: 'yellow',
     },
@@ -106,5 +105,5 @@ function settlementPartnerId(ref: string | ApiSettlementPartnerRef): string {
 export function settlementsForPartner(settlements: ApiPartnerSettlement[], partnerId: string): Settlement[] {
   return settlements
     .filter((settlement) => settlementPartnerId(settlement.partner) === partnerId)
-    .map((settlement) => ({ period: settlement.period, amount: formatMoney(settlement.amount), status: settlement.status }));
+    .map((settlement) => ({ id: settlement._id, period: settlement.period, amount: formatMoney(settlement.amount), status: settlement.status }));
 }
