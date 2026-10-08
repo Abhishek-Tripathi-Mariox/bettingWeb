@@ -16,14 +16,21 @@ type RevenueTab = (typeof REVENUE_TABS)[number];
 /** Each tab reads the same series through a different lens. */
 const TAB_FACTOR: Record<RevenueTab, number> = { Revenue: 1, Wallet: 1.6, Commission: 0.24 };
 
-export function RevenuePanel({ data }: { data: ChartPoint[] }) {
+export type RevenuePanelProps = {
+  data: ChartPoint[];
+  /** Real per-tab series (super-admin); without it each tab rescales `data`. */
+  series?: Record<RevenueTab, ChartPoint[]>;
+  subtitle?: string;
+};
+
+export function RevenuePanel({ data, series, subtitle = 'Jan–Jul 2024' }: RevenuePanelProps) {
   const [tab, setTab] = useState<RevenueTab>('Revenue');
-  const scaled = data.map((point) => ({ ...point, value: point.value * TAB_FACTOR[tab] }));
+  const scaled = series ? series[tab] : data.map((point) => ({ ...point, value: point.value * TAB_FACTOR[tab] }));
 
   return (
     <SectionCard
       title="Revenue Overview"
-      subtitle="Jan–Jul 2024"
+      subtitle={subtitle}
       action={<Tabs items={REVENUE_TABS} value={tab} onChange={setTab} aria-label="Revenue series" />}
     >
       <AreaChart data={scaled} />
@@ -44,11 +51,11 @@ const WALLET_SERIES: BarSeries[] = [
   { name: 'Withdrawals', color: 'var(--color-danger)' },
 ];
 
-export function WalletFlowPanel({ data }: { data: BarGroup[] }) {
+export function WalletFlowPanel({ data, subtitle = 'Deposits vs Withdrawals this week' }: { data: BarGroup[]; subtitle?: string }) {
   return (
     <SectionCard
       title="Wallet Flow"
-      subtitle="Deposits vs Withdrawals this week"
+      subtitle={subtitle}
       action={<ChartLegend series={WALLET_SERIES} />}
     >
       <BarChart data={data} series={WALLET_SERIES} />
@@ -58,7 +65,15 @@ export function WalletFlowPanel({ data }: { data: BarGroup[] }) {
 
 export type CommissionRow = { label: string; percent: number; color: string };
 
-export function CommissionPanel({ rows, total }: { rows: CommissionRow[]; total: string }) {
+export function CommissionPanel({
+  rows,
+  total,
+  totalLabel = 'Total Commission Today',
+}: {
+  rows: CommissionRow[];
+  total: string;
+  totalLabel?: string;
+}) {
   return (
     <SectionCard title="Commission Split" subtitle="By hierarchy level">
       <div className={styles.meters}>
@@ -67,7 +82,7 @@ export function CommissionPanel({ rows, total }: { rows: CommissionRow[]; total:
         ))}
       </div>
       <div className={styles.commissionTotal}>
-        <p className={styles.commissionTotalLabel}>Total Commission Today</p>
+        <p className={styles.commissionTotalLabel}>{totalLabel}</p>
         <p className={styles.commissionTotalValue}>{total}</p>
       </div>
     </SectionCard>

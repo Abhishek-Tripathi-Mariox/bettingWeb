@@ -38,8 +38,8 @@ export const cmsApi = {
       accessToken,
     }),
 
-  list: (kind: CmsKind, accessToken: string) =>
-    apiRequest<{ items: CmsContentItem[] }>(`/cms?kind=${encodeURIComponent(kind)}`, { accessToken }),
+  list: (accessToken: string, kind?: CmsKind) =>
+    apiRequest<{ items: CmsContentItem[] }>(kind ? `/cms?kind=${encodeURIComponent(kind)}` : '/cms', { accessToken }),
 
   create: (draft: CmsContentDraft, accessToken: string) =>
     apiRequest<{ content: CmsContentItem }>('/cms', { method: 'POST', body: draft, accessToken }),

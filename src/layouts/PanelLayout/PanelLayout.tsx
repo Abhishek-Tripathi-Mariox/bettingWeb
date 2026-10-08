@@ -23,7 +23,8 @@ function useClock(): string {
     const id = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(id);
   }, []);
-  return now.toLocaleTimeString('en-IN', { hour12: true });
+  // Always India time — the status bar labels it IST whatever the browser's zone is.
+  return now.toLocaleTimeString('en-IN', { hour12: true, timeZone: 'Asia/Kolkata' });
 }
 
 /**
@@ -37,6 +38,7 @@ export function PanelLayout() {
   const role = getRole(user!.roleId);
   const current = useCurrentNavItem(role);
   const clock = useClock();
+  const displayName = user!.name || user!.username;
 
   const handleSignOut = () => {
     signOut();
@@ -51,6 +53,7 @@ export function PanelLayout() {
       />
       <Sidebar
         role={role}
+        displayName={displayName}
         open={navOpen}
         onNavigate={() => setNavOpen(false)}
         onToggle={() => setNavOpen((open) => !open)}
@@ -62,6 +65,7 @@ export function PanelLayout() {
           role={role}
           section={current.label}
           username={user!.username}
+          displayName={displayName}
           onToggleNav={() => setNavOpen((open) => !open)}
         />
         <main className={styles.content}>

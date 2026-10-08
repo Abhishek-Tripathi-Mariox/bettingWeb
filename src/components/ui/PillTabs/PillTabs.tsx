@@ -60,8 +60,8 @@ export function PillTabs({
               className={styles.badge}
               style={
                 {
-                  '--badge-bg': `rgba(${item.rgb ?? '33, 150, 243'}, 0.2)`,
-                  '--badge-color': `rgb(${item.rgb ?? '33, 150, 243'})`,
+                  '--badge-bg': `rgba(${item.rgb ?? 'var(--color-primary-rgb)'}, 0.2)`,
+                  '--badge-color': `rgb(${item.rgb ?? 'var(--color-primary-rgb)'})`,
                 } as CSSProperties
               }
             >

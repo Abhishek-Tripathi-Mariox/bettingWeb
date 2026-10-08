@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { useEffect, useMemo, useState } from 'react';
 import { BanIcon, CheckCircleIcon, EyeIcon, PlusIcon } from '../../components/icons';
 import { Badge } from '../../components/ui/Badge/Badge';
@@ -31,6 +32,8 @@ export function EventsPage() {
   const [error, setError] = useState<string | null>(null);
   /** Bumped to re-run the load effect after a mutation (create/status change). */
   const [reloadKey, setReloadKey] = useState(0);
+  // Live: match status and new bets refresh this page as they happen.
+  useLiveRefresh(['matches:changed', 'admin:changed'], () => setReloadKey((key) => key + 1));
 
   useEffect(() => {
     if (!accessToken) return;
@@ -119,7 +122,7 @@ export function EventsPage() {
     },
     {
       key: 'bets',
-      header: 'Active Bets',
+      header: 'Total Bets',
       render: (event) => {
         const eventMarkets = byEvent.get(event._id) ?? [];
         const bets = eventMarkets.reduce((sum, market) => sum + market.bets, 0);
@@ -154,23 +157,23 @@ export function EventsPage() {
           >
             Activity
           </Button>
-          {event.status === 'Live' ? (
+          {event.status === 'Live' || (event.provider === 'diamond' && event.status === 'Upcoming') ? (
             <Button
               className={styles.suspend}
               size="xs"
               icon={<BanIcon size={12} />}
-              onClick={() => updateStatus(event, 'Completed')}
+              onClick={() => updateStatus(event, 'Suspended')}
             >
               Suspend
             </Button>
-          ) : event.status !== 'Settled' ? (
+          ) : event.status !== 'Settled' && event.status !== 'Completed' ? (
             <Button
               variant="primary"
               size="xs"
               icon={<CheckCircleIcon size={12} />}
               onClick={() => updateStatus(event, 'Live')}
             >
-              Activate
+              {event.provider === 'diamond' ? 'Resume' : 'Activate'}
             </Button>
           ) : null}
         </div>

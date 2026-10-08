@@ -22,6 +22,15 @@ export type ApiMarket = {
   maxBet: number;
   maxExposure: number;
   status: ApiMarketStatus;
+  /** Backable selections; empty = the event's two sides at back / lay odds. */
+  runners?: { name: string; odds: number; active?: boolean }[];
+  /** Feed markets (Diamond): prices and status come from the feed, so they aren't edited by hand. */
+  externalId?: string | null;
+  /** Last raw answer from the feed's result endpoint, while the market waits for a result. */
+  lastResult?: string;
+  /** Set once the market is settled. */
+  winner?: string | null;
+  settledAt?: string | null;
   /** Cached rollups from this market's bets. */
   bets: number;
   stake: number;
@@ -40,6 +49,8 @@ export type CreateMarketPayload = {
   maxBet?: number;
   maxExposure?: number;
   status?: ApiMarketStatus;
+  /** What players can back, each at its own price. Back / lay odds follow the first two. */
+  runners?: { name: string; odds: number }[];
 };
 
 export type UpdateMarketPayload = Partial<Omit<CreateMarketPayload, 'event'>>;
@@ -77,7 +88,27 @@ export const marketsApi = {
       accessToken,
     }),
 
-  /** Bulk-suspends every Active market. Response is `{ modifiedCount }` — see market.service.js#suspendAll. */
-  suspendAll: (accessToken?: string | null) =>
-    apiRequest<{ modifiedCount: number }>('/markets/suspend-all', { method: 'POST', accessToken }),
+  /** Settles every open bet on the market with `winner` and closes it for good. */
+  /** No result: open bets are voided and their stakes released. */
+  void: (id: string, reason: string, accessToken?: string | null) =>
+    apiRequest<{ market: ApiMarket; voided: number; released: number }>(`/markets/${id}/void`, {
+      method: 'POST',
+      body: { reason },
+      accessToken,
+    }),
+
+  settle: (id: string, winner: string, accessToken?: string | null) =>
+    apiRequest<{ market: ApiMarket; settled: number; won: number; lost: number }>(`/markets/${id}/settle`, {
+      method: 'POST',
+      body: { winner },
+      accessToken,
+    }),
+
+  /** Bulk-suspends Active markets — one event's, or every one when `eventId` is omitted. Response is `{ modifiedCount }`. */
+  suspendAll: (accessToken?: string | null, eventId?: string) =>
+    apiRequest<{ modifiedCount: number }>('/markets/suspend-all', {
+      method: 'POST',
+      body: eventId ? { eventId } : {},
+      accessToken,
+    }),
 };

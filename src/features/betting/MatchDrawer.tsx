@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { BanIcon, CheckCircleIcon } from '../../components/icons';
 import { Badge } from '../../components/ui/Badge/Badge';
@@ -9,6 +9,8 @@ import { formatCount, formatMoney, formatStartTime } from '../../lib/format';
 import { ApiRequestError } from '../../lib/api';
 import type { ApiMatch } from '../../lib/api/betting';
 import { eventsApi } from '../../lib/api/events';
+import type { EventBet } from '../events/eventsData';
+import { mapEventBets } from '../events/eventsData';
 import { useAuth } from '../auth/authContext';
 import { matchBetsCount } from './bettingData';
 import styles from './MatchDrawer.module.css';
@@ -33,6 +35,25 @@ export function MatchDrawer({ match, onClose, onChanged }: MatchDrawerProps) {
   const [current, setCurrent] = useState(match);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Latest bets on this match, fetched when the Bets tab first opens. */
+  const [bets, setBets] = useState<EventBet[] | null>(null);
+  const [betsError, setBetsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (tab !== 'Bets' || bets || !accessToken) return;
+    let cancelled = false;
+    eventsApi
+      .get(match._id, accessToken)
+      .then((res) => {
+        if (!cancelled) setBets(mapEventBets(res.recentBets, res.markets));
+      })
+      .catch((err) => {
+        if (!cancelled) setBetsError(err instanceof ApiRequestError ? err.message : 'Unable to load bets.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, bets, accessToken, match._id]);
 
   const totalBets = matchBetsCount(current);
   const summary = [
@@ -42,7 +63,7 @@ export function MatchDrawer({ match, onClose, onChanged }: MatchDrawerProps) {
     { label: 'Exposure', value: formatMoney(current.exposure), color: 'var(--color-live)' },
   ];
 
-  const handleToggleStatus = async (status: 'Live' | 'Completed') => {
+  const handleToggleStatus = async (status: 'Live' | 'Suspended') => {
     if (!accessToken) return;
     setPending(true);
     setError(null);
@@ -122,8 +143,8 @@ export function MatchDrawer({ match, onClose, onChanged }: MatchDrawerProps) {
                 </p>
               </div>
               <div className={styles.rowActions}>
-                <Badge tone={market.status === 'Active' ? 'success' : 'neutral'}>
-                  {market.status === 'Active' ? 'Active' : 'Closed'}
+                <Badge tone={market.status === 'Active' ? 'success' : market.winner ? 'neutral' : 'warning'}>
+                  {market.status === 'Active' ? 'Active' : market.winner ? `Settled: ${market.winner}` : 'Suspended'}
                 </Badge>
               </div>
             </div>
@@ -133,10 +154,25 @@ export function MatchDrawer({ match, onClose, onChanged }: MatchDrawerProps) {
 
       {tab === 'Bets' ? (
         <div>
-          <p className={styles.listCaption}>
-            The betting board doesn't expose a per-match bet feed yet — see the event's Activity drawer for recent
-            bets on this fixture.
-          </p>
+          {betsError ? <p className={styles.listCaption}>{betsError}</p> : null}
+          {!bets && !betsError ? <p className={styles.listCaption}>Loading bets…</p> : null}
+          {bets?.length === 0 ? <p className={styles.listCaption}>No bets on this match yet.</p> : null}
+          {bets?.length ? <p className={styles.listCaption}>Latest {bets.length} bets on this match</p> : null}
+          {bets?.map((bet) => (
+            <div key={bet.id} className={styles.row}>
+              <div>
+                <p className={styles.rowTitle}>
+                  {bet.user} · {bet.amount}
+                </p>
+                <p className={styles.rowMeta}>
+                  {bet.market} · {bet.selection} @ {bet.odds} · {bet.when}
+                </p>
+              </div>
+              <div className={styles.rowActions}>
+                <Badge tone={bet.status.tone}>{bet.status.label}</Badge>
+              </div>
+            </div>
+          ))}
         </div>
       ) : null}
     </Drawer>
@@ -152,7 +188,7 @@ function OverviewTab({
   match: ApiMatch;
   totalBets: number;
   pending: boolean;
-  onToggleStatus: (status: 'Live' | 'Completed') => void;
+  onToggleStatus: (status: 'Live' | 'Suspended') => void;
 }) {
   const details = [
     { label: 'Match ID', value: match._id },
@@ -161,6 +197,7 @@ function OverviewTab({
     { label: 'Start Time', value: match.status === 'Live' ? 'In Play' : formatStartTime(match.startTime) },
     { label: 'Active Markets', value: String(match.markets.filter((m) => m.status === 'Active').length) },
     { label: 'Total Bets', value: formatCount(totalBets) },
+    { label: 'Source', value: match.provider === 'diamond' ? 'Live feed (Diamond)' : 'Created in panel' },
   ];
 
   return (
@@ -174,18 +211,25 @@ function OverviewTab({
         ))}
       </div>
 
+      {match.status === 'Live' && match.streamUrl ? (
+        <iframe className={styles.stream} src={match.streamUrl} title={`${match.name} live video`} allow="autoplay; fullscreen" />
+      ) : null}
+      {match.status === 'Live' && match.scoreUrl ? (
+        <iframe className={styles.scorecard} src={match.scoreUrl} title={`${match.name} live score`} />
+      ) : null}
+
       <div className={styles.actions}>
-        {match.status === 'Live' ? (
+        {match.status === 'Live' || (match.provider === 'diamond' && match.status === 'Upcoming') ? (
           <Button
             className={styles.suspend}
             size="sm"
             icon={<BanIcon size={13.993} />}
-            onClick={() => onToggleStatus('Completed')}
+            onClick={() => onToggleStatus('Suspended')}
             disabled={pending}
           >
             {pending ? 'Suspending…' : 'Suspend Match'}
           </Button>
-        ) : match.status !== 'Settled' ? (
+        ) : match.status !== 'Settled' && match.status !== 'Completed' ? (
           <Button
             variant="primary"
             size="sm"
@@ -193,7 +237,7 @@ function OverviewTab({
             onClick={() => onToggleStatus('Live')}
             disabled={pending}
           >
-            {pending ? 'Activating…' : 'Activate Match'}
+            {pending ? 'Saving…' : match.provider === 'diamond' ? 'Resume' : 'Activate Match'}
           </Button>
         ) : null}
       </div>

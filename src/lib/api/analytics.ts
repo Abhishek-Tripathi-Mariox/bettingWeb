@@ -17,7 +17,20 @@ export type AnalyticsHighlights = {
   totalCommission: number;
 };
 
+type Compare = { current: number; previous: number };
+
+/** Last 30 days vs the 30 days before (see analytics.service.js getGrowth). */
+export type AnalyticsGrowth = {
+  revenue: Compare;
+  betVolume: Compare;
+  newPlayers: Compare;
+  activePlayers: number;
+  totalPlayers: number;
+};
+
 export const analyticsApi = {
+  growth: (accessToken: string) => apiRequest<{ growth: AnalyticsGrowth }>('/analytics/growth', { accessToken }),
+
   series: (dimension: AnalyticsDimension, accessToken: string) =>
     apiRequest<AnalyticsSeriesResponse>(`/analytics/series?dimension=${dimension}`, { accessToken }),
 

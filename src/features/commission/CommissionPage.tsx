@@ -14,9 +14,6 @@ import type { ApiCommission, ApiCommissionLevel, ApiCommissionStatus } from '../
 import { useAuth } from '../auth/authContext';
 import {
   COMMISSION_LEVELS,
-  COMMISSION_ROWS,
-  COMMISSION_SPLIT,
-  COMMISSION_STATS,
   COMMISSION_STATUSES,
   SETTLEMENT_TONE,
   commissionSplit,
@@ -29,80 +26,26 @@ import styles from './CommissionPage.module.css';
 const ALL = 'all';
 
 /**
- * Commission console — node 112:6945. Shared across every role's nav, but the
- * `/commission` endpoints are super-admin-only. Non-super-admin roles keep
- * the original static preview exactly as before; only super-admin fetches
- * and mutates real data.
+ * Commission console — node 112:6945. Every role sees live rows scoped to its
+ * network by the backend; Recompute and Settle are super-admin actions.
  */
 export function CommissionPage() {
   const { user, accessToken } = useAuth();
-  const isSuperAdmin = user?.roleId === 'super-admin';
-
-  if (!isSuperAdmin) {
-    return <CommissionPreview />;
-  }
-
-  return <LiveCommissionPage accessToken={accessToken} />;
-}
-
-/** Unchanged dummy-data view for franchise / super-agent / agent. */
-function CommissionPreview() {
-  const columns: Column<CommissionRow>[] = [
-    { key: 'entity', header: 'Entity', render: (row) => <span className={styles.entity}>{row.entity}</span> },
-    { key: 'level', header: 'Level', render: (row) => <Badge tone="brand">{row.level}</Badge> },
-    { key: 'turnover', header: 'Turnover', render: (row) => <span className={styles.turnover}>{row.turnover}</span> },
-    { key: 'rate', header: 'Comm %', render: (row) => <span className={styles.rate}>{row.rate}</span> },
-    {
-      key: 'commission',
-      header: 'Commission',
-      render: (row) => <span className={styles.commission}>{row.commission}</span>,
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (row) => <Badge tone={SETTLEMENT_TONE[row.status]}>{row.status}</Badge>,
-    },
-    {
-      key: 'action',
-      header: 'Action',
-      render: (row) =>
-        row.status === 'Pending' ? (
-          <Button variant="primary" size="xs" icon={<SendIcon size={12} />}>
-            Settle
-          </Button>
-        ) : null,
-    },
-  ];
-
-  return (
-    <div className={styles.page}>
-      <div className={styles.stats}>
-        {COMMISSION_STATS.map((stat) => (
-          <StatCard key={stat.label} {...stat} />
-        ))}
-      </div>
-
-      <div className={styles.split}>
-        <SectionCard title="Commission Breakdown" subtitle="By hierarchy — July 2024" size="md" bodySpacing={20}>
-          <DataTable
-            columns={columns}
-            rows={COMMISSION_ROWS}
-            rowKey={(row) => row.id}
-            size="lg"
-            emptyMessage="No commission booked this period."
-          />
-        </SectionCard>
-
-        <SectionCard title="Commission Distribution">
-          <DonutChart data={COMMISSION_SPLIT} layout="stack" />
-        </SectionCard>
-      </div>
-    </div>
-  );
+  const adminTools = user?.roleId === 'super-admin';
+  return <LiveCommissionPage accessToken={accessToken} adminTools={adminTools} viewer={adminTools ? undefined : user?.username} />;
 }
 
 /** Live view — fetches, filters, recomputes and settles real `/commission` rows. */
-function LiveCommissionPage({ accessToken }: { accessToken: string | null }) {
+function LiveCommissionPage({
+  accessToken,
+  adminTools,
+  viewer,
+}: {
+  accessToken: string | null;
+  adminTools: boolean;
+  /** Username of a network role reading its own commission; undefined for the admin's platform view. */
+  viewer?: string;
+}) {
   const [level, setLevel] = useState<string>(ALL);
   const [status, setStatus] = useState<string>(ALL);
   const [items, setItems] = useState<ApiCommission[]>([]);
@@ -139,7 +82,7 @@ function LiveCommissionPage({ accessToken }: { accessToken: string | null }) {
     };
   }, [accessToken, level, status, reloadKey]);
 
-  const stats = useMemo(() => commissionStats(items), [items]);
+  const stats = useMemo(() => commissionStats(items, viewer), [items, viewer]);
   const rows = useMemo(() => mapCommissionRows(items), [items]);
   const split = useMemo(() => commissionSplit(items), [items]);
 
@@ -188,7 +131,7 @@ function LiveCommissionPage({ accessToken }: { accessToken: string | null }) {
       key: 'action',
       header: 'Action',
       render: (row) =>
-        row.status === 'Pending' ? (
+        adminTools && row.status === 'Pending' ? (
           <Button
             variant="primary"
             size="xs"
@@ -238,9 +181,11 @@ function LiveCommissionPage({ accessToken }: { accessToken: string | null }) {
                 value={status === ALL ? '' : status}
                 onChange={(evt) => setStatus(evt.target.value || ALL)}
               />
-              <Button size="xs" icon={<RefreshIcon size={12} />} onClick={recompute} disabled={recomputing}>
-                {recomputing ? 'Recomputing…' : 'Recompute'}
-              </Button>
+              {adminTools ? (
+                <Button size="xs" icon={<RefreshIcon size={12} />} onClick={recompute} disabled={recomputing}>
+                  {recomputing ? 'Recomputing…' : 'Recompute'}
+                </Button>
+              ) : null}
             </div>
           }
         >

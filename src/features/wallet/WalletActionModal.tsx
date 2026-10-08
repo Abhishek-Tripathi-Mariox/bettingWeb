@@ -13,7 +13,6 @@ import { Modal } from '../../components/ui/Modal/Modal';
 import { SelectField } from '../../components/ui/TextField/SelectField';
 import { TextAreaField } from '../../components/ui/TextField/TextAreaField';
 import { TextField } from '../../components/ui/TextField/TextField';
-import { WALLET_USERS } from './walletData';
 import styles from './WalletActionModal.module.css';
 import type { ComponentType } from 'react';
 
@@ -35,10 +34,18 @@ const ACTIONS: Record<WalletAction, ActionSpec> = {
   Adjustment: { icon: RefreshIcon, rgb: '250, 204, 21', darkLabel: true },
 };
 
+export type WalletUserOption = { id: string; label: string };
+
+export type WalletActionSubmit = { userId: string; toUserId?: string; amount: number; note: string };
+
 export type WalletActionModalProps = {
   action: WalletAction;
   onClose: () => void;
   onConfirm: () => void;
+  /** Accounts the operation can target. */
+  users: WalletUserOption[];
+  /** The API call to run on confirm. */
+  onSubmit: (values: WalletActionSubmit) => Promise<void>;
 };
 
 /**
@@ -46,16 +53,36 @@ export type WalletActionModalProps = {
  * 119:36414, 119:37465 and 119:38529 differ only by accent, icon and the
  * extra destination field on Transfer.
  */
-export function WalletActionModal({ action, onClose, onConfirm }: WalletActionModalProps) {
+export function WalletActionModal({ action, onClose, onConfirm, users, onSubmit }: WalletActionModalProps) {
   const spec = ACTIONS[action];
   const Icon = spec.icon;
   const [form, setForm] = useState({ user: '', amount: '', destination: '', note: '' });
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const set = (key: keyof typeof form) => (value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const userOptions = users.map((user) => user.label);
+  const idFor = (label: string) => users.find((user) => user.label === label)?.id;
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onConfirm();
+    const userId = idFor(form.user);
+    const toUserId = spec.destination ? idFor(form.destination) : undefined;
+    const amount = Number(form.amount);
+    if (!userId) return setError('Select a user.');
+    if (spec.destination && !toUserId) return setError('Select a destination user.');
+    if (!(amount > 0)) return setError('Enter an amount greater than zero.');
+    setPending(true);
+    setError(null);
+    try {
+      await onSubmit({ userId, toUserId, amount, note: form.note.trim() });
+      onConfirm();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong.');
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -82,7 +109,7 @@ export function WalletActionModal({ action, onClose, onConfirm }: WalletActionMo
         <div className={styles.fields}>
           <SelectField
             label="Select User *"
-            options={WALLET_USERS}
+            options={userOptions}
             placeholder="— Search and select user —"
             value={form.user}
             onChange={(event) => set('user')(event.target.value)}
@@ -100,7 +127,7 @@ export function WalletActionModal({ action, onClose, onConfirm }: WalletActionMo
           {spec.destination ? (
             <SelectField
               label="Transfer to User *"
-              options={WALLET_USERS}
+              options={userOptions}
               placeholder="— Select destination user —"
               value={form.destination}
               onChange={(event) => set('destination')(event.target.value)}
@@ -114,15 +141,18 @@ export function WalletActionModal({ action, onClose, onConfirm }: WalletActionMo
           />
         </div>
 
+        {error ? <p role="alert">{error}</p> : null}
+
         <div className={styles.footer}>
           <Button
+            disabled={pending}
             className={`${styles.confirm} ${spec.darkLabel ? styles.confirmDark : ''}`}
             style={{ backgroundColor: `rgb(${spec.rgb})` }}
             type="submit"
             size="sm"
             icon={<CheckCircleIcon size={13.993} />}
           >
-            Confirm {action}
+            {pending ? 'Saving…' : `Confirm ${action}`}
           </Button>
           <Button className={styles.cancel} variant="outline" size="sm" onClick={onClose}>
             Cancel

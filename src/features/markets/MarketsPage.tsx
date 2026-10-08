@@ -1,5 +1,7 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { useLocation } from 'react-router-dom';
 import { BanIcon, CheckCircleIcon, PencilIcon, PlusIcon, RefreshIcon } from '../../components/icons';
 import { Badge } from '../../components/ui/Badge/Badge';
 import { Button } from '../../components/ui/Button/Button';
@@ -18,21 +20,30 @@ import { MarketFormModal } from './MarketFormModal';
 import { MARKET_STATUS_TONE, marketStats, marketTypeColor } from './marketsData';
 import styles from './MarketsPage.module.css';
 
+/** Settle-picker value for voiding the market instead of naming a winner. */
+const VOID = '__void__';
 const ALL_EVENTS = 'all';
 
 /** Market manager — node 112:5525. */
 export function MarketsPage() {
   const { accessToken } = useAuth();
+  const location = useLocation();
   const [events, setEvents] = useState<ApiEvent[]>([]);
-  const [scope, setScope] = useState<string>(ALL_EVENTS);
+  // Risk's View button opens this page on one event.
+  const [scope, setScope] = useState<string>((location.state as { eventId?: string } | null)?.eventId ?? ALL_EVENTS);
   const [markets, setMarkets] = useState<ApiMarket[]>([]);
   const [pending, setPending] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Live: odds, market status and new bets refresh this page as they happen.
+  useLiveRefresh(['odds', 'matches:changed', 'admin:changed'], () => setReloadKey((key) => key + 1));
   /** null = closed, 'new' = Add Market, a market = Edit Market. */
   const [form, setForm] = useState<ApiMarket | 'new' | null>(null);
   const [suspendingAll, setSuspendingAll] = useState(false);
   const [rowPending, setRowPending] = useState<string | null>(null);
+  /** Market whose winner picker is open, and the picked selection. */
+  const [settling, setSettling] = useState<{ id: string; winner: string } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -85,11 +96,43 @@ export function MarketsPage() {
     }
   };
 
+  /** Mirrors the backend's `runnersFor`: explicit runners, else the event's two sides. */
+  const selectionsFor = (row: ApiMarket) => {
+    if (row.runners?.length) return row.runners.map((r) => r.name);
+    const name = typeof row.event === 'string' ? '' : row.event.name;
+    const [home, away] = name.split(/\s+vs\.?\s+/i);
+    return [home || name, away || 'Draw'].filter(Boolean);
+  };
+
+  const settle = async () => {
+    if (!accessToken || !settling?.winner) return;
+    setRowPending(settling.id);
+    try {
+      if (settling.winner === VOID) {
+        const res = await marketsApi.void(settling.id, 'Match abandoned / no result', accessToken);
+        setNotice(`Market voided: ${res.voided} open bets returned (₹${res.released.toLocaleString('en-IN')} released).`);
+      } else {
+        const res = await marketsApi.settle(settling.id, settling.winner, accessToken);
+        setNotice(`Settled on ${settling.winner}: ${res.settled} bets (${res.won} won, ${res.lost} lost).`);
+      }
+      setSettling(null);
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Unable to settle the market.');
+    } finally {
+      setRowPending(null);
+    }
+  };
+
   const suspendAll = async () => {
     if (!accessToken) return;
+    const eventId = scope === ALL_EVENTS ? undefined : scope;
+    const where = eventId ? 'on this event' : 'on EVERY event across the platform';
+    if (!window.confirm(`Suspend all active markets ${where}? Players can't bet on them until re-enabled.`)) return;
     setSuspendingAll(true);
     try {
-      await marketsApi.suspendAll(accessToken);
+      const { modifiedCount } = await marketsApi.suspendAll(accessToken, eventId);
+      setNotice(`${modifiedCount} market${modifiedCount === 1 ? '' : 's'} suspended.`);
       setReloadKey((key) => key + 1);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : 'Unable to suspend all markets.');
@@ -119,7 +162,7 @@ export function MarketsPage() {
       render: (row) => (
         <div>
           <p className={styles.name}>{row.name}</p>
-          <p className={styles.code}>{row.code}</p>
+          <p className={styles.code}>{row.externalId ? `${row.type} · Live feed (Diamond)` : row.code}</p>
         </div>
       ),
     },
@@ -141,15 +184,58 @@ export function MarketsPage() {
     {
       key: 'status',
       header: 'Status',
-      render: (row) => <Badge tone={MARKET_STATUS_TONE[row.status]}>{row.status}</Badge>,
+      render: (row) =>
+        row.winner === 'Void' ? (
+          <Badge tone="warning">Void · stakes returned</Badge>
+        ) : row.winner ? (
+          <Badge tone="info">Settled · {row.winner}</Badge>
+        ) : (
+          <Badge tone={MARKET_STATUS_TONE[row.status]}>{row.status}</Badge>
+        ),
     },
     {
       key: 'actions',
       header: 'Actions',
-      render: (row) => (
+      render: (row) =>
+        row.winner ? null : settling?.id === row._id ? (
+          <div className={styles.rowActions}>
+            <select
+              className={styles.settleSelect}
+              aria-label="Winning selection"
+              value={settling.winner}
+              onChange={(e) => setSettling({ id: row._id, winner: e.target.value })}
+            >
+              <option value="">Winner…</option>
+              {selectionsFor(row).map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+              <option value={VOID}>Void — no result, return stakes</option>
+            </select>
+            <Button
+              className={styles.enable}
+              size="xs"
+              icon={<CheckCircleIcon size={12} />}
+              onClick={settle}
+              disabled={!settling.winner || rowPending === row._id}
+            >
+              {rowPending === row._id ? 'Settling…' : 'Confirm'}
+            </Button>
+            <Button className={styles.edit} size="xs" onClick={() => setSettling(null)}>
+              Cancel
+            </Button>
+          </div>
+        ) : (
         <div className={styles.rowActions}>
-          <Button className={styles.edit} size="xs" icon={<PencilIcon size={12} />} onClick={() => setForm(row)}>
-            Edit
+          {/* Feed markets take their prices from Diamond every few seconds — a manual edit wouldn't stick. */}
+          {row.externalId ? null : (
+            <Button className={styles.edit} size="xs" icon={<PencilIcon size={12} />} onClick={() => setForm(row)}>
+              Edit
+            </Button>
+          )}
+          <Button className={styles.enable} size="xs" onClick={() => setSettling({ id: row._id, winner: '' })}>
+            Settle
           </Button>
           {row.status === 'Active' ? (
             <Button
@@ -217,7 +303,7 @@ export function MarketsPage() {
               icon={<RefreshIcon size={12} />}
               onClick={() => setReloadKey((key) => key + 1)}
             >
-              Refresh Odds
+              Refresh
             </Button>
             <Button
               className={styles.suspendAll}
@@ -245,6 +331,11 @@ export function MarketsPage() {
             {error}
           </p>
         ) : null}
+        {notice ? (
+          <p role="status" style={{ color: 'var(--color-success)', margin: '12px 0 0', fontSize: 12 }}>
+            {notice}
+          </p>
+        ) : null}
 
         <div className={styles.table}>
           <DataTable
@@ -252,7 +343,7 @@ export function MarketsPage() {
             rows={markets}
             rowKey={(row) => row._id}
             size="lg"
-            emptyMessage={pending ? 'Loading markets…' : 'No markets on this event yet.'}
+            emptyMessage={pending ? 'Loading markets…' : scope === ALL_EVENTS ? 'No markets yet.' : 'No markets on this event yet.'}
           />
         </div>
       </section>

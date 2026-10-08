@@ -38,6 +38,25 @@ export function EventDrawer({ eventId, onClose, onChanged }: EventDrawerProps) {
   const [pending, setPending] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [suspending, setSuspending] = useState(false);
+  /** The score being typed; null until the admin touches the field. */
+  const [scoreDraft, setScoreDraft] = useState<string | null>(null);
+  const [savingScore, setSavingScore] = useState(false);
+
+  const saveScore = async () => {
+    if (!accessToken || scoreDraft === null) return;
+    setSavingScore(true);
+    setError(null);
+    try {
+      const res = await eventsApi.updateScore(eventId, scoreDraft.trim(), accessToken);
+      setDetail((current) => (current ? { ...current, event: res.event } : current));
+      setScoreDraft(null);
+      onChanged?.();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Unable to save the score.');
+    } finally {
+      setSavingScore(false);
+    }
+  };
 
   useEffect(() => {
     if (!accessToken) return;
@@ -66,7 +85,7 @@ export function EventDrawer({ eventId, onClose, onChanged }: EventDrawerProps) {
     if (!accessToken || !detail) return;
     setSuspending(true);
     try {
-      const res = await eventsApi.updateStatus(detail.event._id, 'Completed', accessToken);
+      const res = await eventsApi.updateStatus(detail.event._id, 'Suspended', accessToken);
       setDetail((current) => (current ? { ...current, event: res.event } : current));
       onChanged?.();
     } catch (err) {
@@ -138,6 +157,27 @@ export function EventDrawer({ eventId, onClose, onChanged }: EventDrawerProps) {
           </div>
           <p className={styles.league}>{event.league}</p>
           {event.score ? <p className={styles.score}>{event.score}</p> : null}
+          {event.status === 'Live' ? (
+            <form
+              className={styles.scoreForm}
+              onSubmit={(submitted) => {
+                submitted.preventDefault();
+                void saveScore();
+              }}
+            >
+              <input
+                className={styles.scoreInput}
+                aria-label="Live score"
+                placeholder="Live score, e.g. 142/3 (16.2 Ov)"
+                maxLength={40}
+                value={scoreDraft ?? event.score}
+                onChange={(typed) => setScoreDraft(typed.target.value)}
+              />
+              <Button size="xs" type="submit" disabled={savingScore || scoreDraft === null || scoreDraft.trim() === event.score}>
+                {savingScore ? 'Saving…' : 'Update Score'}
+              </Button>
+            </form>
+          ) : null}
           <p className={styles.code}>{event._id}</p>
 
           <div className={styles.summary}>

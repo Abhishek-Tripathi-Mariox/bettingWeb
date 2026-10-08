@@ -24,6 +24,8 @@
 
   /* Brand */
   --color-primary: #2196f3;
+  /* The same colour as an r, g, b triplet, for rgba(var(--color-primary-rgb), alpha). Settings → Brand overrides both. */
+  --color-primary-rgb: 33, 150, 243;
   --color-primary-light: #29b6f6;
   --color-primary-dark: #1976d2;
   --color-primary-soft: rgba(33, 150, 243, 0.08);

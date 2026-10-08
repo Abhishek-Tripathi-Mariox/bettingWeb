@@ -8,97 +8,134 @@ import {
   UsersIcon,
   WalletIcon,
 } from '../../components/icons';
-import type { StatCardProps } from '../../components/ui/StatCard/StatCard';
+import type { BarGroup } from '../../components/charts/BarChart';
 import type { BadgeTone } from '../../components/ui/Badge/Badge';
+import type { StatCardProps } from '../../components/ui/StatCard/StatCard';
+import type { MyDashboard } from '../../lib/api/network';
+import { formatCount, formatMoney, formatRupees, formatPercent } from '../../lib/format';
 
 export type OverviewTile = { label: string; value: string; share: string; color: string };
 
-export type AgentActivity = { description: string; time: string };
+/** "+4 vs yesterday" style delta; omitted when both days are zero. */
+function delta(today: number, yesterday: number, format: (n: number) => string): Pick<StatCardProps, 'delta' | 'tone'> {
+  if (today === 0 && yesterday === 0) return {};
+  const diff = today - yesterday;
+  return {
+    delta: `${diff >= 0 ? '+' : '-'}${format(Math.abs(diff))} vs yesterday`,
+    tone: diff >= 0 ? 'up' : 'down',
+  };
+}
 
-export type AgentTransaction = {
-  user: string;
-  /** "Deposit · UPI · 12m ago" — kind, method and recency on one line. */
-  meta: string;
-  amount: string;
-  direction: 'in' | 'out';
-  status: 'Success' | 'Pending';
-};
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
-/** Agent dashboard — node 139:114739. Its own screen, not the platform one. */
-export const AGENT_STATS: StatCardProps[] = [
-  { label: 'My Total Users', value: '84', caption: 'Under my panel', icon: UsersIcon, accent: 'blue' },
-  {
-    label: 'Active Users',
-    value: '72',
-    caption: 'Placed bets today',
-    delta: '+4 today vs yesterday',
-    tone: 'up',
-    icon: CheckCircleIcon,
-    accent: 'green',
-  },
-  { label: 'My Wallet Balance', value: '₹12,400', caption: 'Available balance', icon: WalletIcon, accent: 'cyan' },
-  {
-    label: "Today's Bets",
-    value: '342',
-    caption: '₹4.8L total stake',
-    delta: '+48 this hour vs yesterday',
-    tone: 'up',
-    icon: BettingIcon,
-    accent: 'yellow',
-  },
-  {
-    label: "Today's Commission",
-    value: '₹4,840',
-    caption: '7% of turnover',
-    delta: '+₹480 vs yesterday',
-    tone: 'up',
-    icon: CommissionIcon,
-    accent: 'green',
-  },
-  { label: "Today's Revenue", value: '₹48,400', caption: 'Net after payouts', icon: TrendingUpIcon, accent: 'blue' },
-  { label: 'Pending Deposits', value: '3', caption: '₹1.25L total', icon: ArrowDownIcon, accent: 'yellow' },
-  { label: 'Pending Withdrawals', value: '2', caption: '₹36,000 total', icon: ArrowUpIcon, accent: 'red' },
-];
+/** "Across 1 super agent · 2 agents" — who the caller's users sit under. */
+function networkCaption(data: MyDashboard): string {
+  if (data.superAgents.length > 0) {
+    return `Across ${plural(data.superAgents.length, 'super agent')} · ${plural(data.agents.length, 'agent')}`;
+  }
+  return data.agents.length > 0 ? `Across ${plural(data.agents.length, 'agent')}` : 'Under my panel';
+}
 
-export const AGENT_OVERVIEW: OverviewTile[] = [
-  { label: 'Total Users', value: '84', share: '100%', color: 'var(--color-primary)' },
-  { label: 'Active Today', value: '72', share: '85.7%', color: 'var(--color-success)' },
-  { label: 'KYC Verified', value: '68', share: '81%', color: 'var(--color-primary-light)' },
-  { label: 'KYC Pending', value: '6', share: '7.1%', color: 'var(--color-warning)' },
-  { label: 'Suspended', value: '4', share: '4.8%', color: 'var(--color-danger)' },
-  { label: 'New This Month', value: '8', share: '+10.5%', color: '#8b5cf6' },
-];
+type Restricted = 'wallet' | 'bets' | 'commission';
 
-/**
- * Bar heights read off node 139:115210–115228 against the 0–₹8k axis. Sunday
- * lands on ₹4,840, which is exactly the "Today's Commission" figure above.
- */
-export const AGENT_COMMISSION_WEEK = [
-  { label: 'Mon', values: [3200] },
-  { label: 'Tue', values: [4800] },
-  { label: 'Wed', values: [3900] },
-  { label: 'Thu', values: [5200] },
-  { label: 'Fri', values: [4100] },
-  { label: 'Sat', values: [6800] },
-  { label: 'Sun', values: [4840] },
-];
+/** Agent dashboard — node 139:114739, every figure scoped to the agent's own players. */
+export function agentStats(data: MyDashboard): StatCardProps[] {
+  const { stats, commissionRate } = data;
+  // Cards for what the role may not see (Permissions page) are left out; their figures arrive as null.
+  const hidden = new Set(data.restricted ?? []);
+  const cards: [Restricted | null, () => StatCardProps][] = [
+    [null, () => ({
+      label: 'My Total Users',
+      value: formatCount(stats.totalUsers),
+      caption: networkCaption(data),
+      icon: UsersIcon,
+      accent: 'blue',
+    })],
+    [null, () => ({
+      label: 'Active Users',
+      value: formatCount(stats.activeToday),
+      caption: 'Placed bets today',
+      ...delta(stats.activeToday, stats.activeYesterday, formatCount),
+      icon: CheckCircleIcon,
+      accent: 'green',
+    })],
+    ['wallet', () => ({
+      label: 'My Wallet Balance',
+      value: formatRupees(stats.walletBalance),
+      caption: 'Available balance',
+      icon: WalletIcon,
+      accent: 'cyan',
+    })],
+    ['bets', () => ({
+      label: "Today's Bets",
+      value: formatCount(stats.todayBets),
+      caption: `${formatMoney(stats.todayStake)} total stake`,
+      ...delta(stats.todayBets, stats.yesterdayBets, formatCount),
+      icon: BettingIcon,
+      accent: 'yellow',
+    })],
+    ['commission', () => ({
+      label: "Today's Commission",
+      value: formatRupees(stats.todayCommission),
+      caption: `${commissionRate}% of turnover`,
+      ...delta(stats.todayCommission, stats.yesterdayCommission, formatRupees),
+      icon: CommissionIcon,
+      accent: 'green',
+    })],
+    [null, () => ({
+      label: "Today's Revenue",
+      value: formatRupees(stats.todayRevenue),
+      caption: 'Net after payouts',
+      ...delta(stats.todayRevenue, stats.yesterdayRevenue, formatRupees),
+      icon: TrendingUpIcon,
+      accent: 'blue',
+    })],
+    ['wallet', () => ({
+      label: 'Pending Deposits',
+      value: formatCount(stats.pendingDeposits.count),
+      caption: `${formatRupees(stats.pendingDeposits.amount)} total`,
+      icon: ArrowDownIcon,
+      accent: 'yellow',
+    })],
+    ['wallet', () => ({
+      label: 'Pending Withdrawals',
+      value: formatCount(stats.pendingWithdrawals.count),
+      caption: `${formatRupees(stats.pendingWithdrawals.amount)} total`,
+      icon: ArrowUpIcon,
+      accent: 'red',
+    })],
+  ];
+  return cards.filter(([need]) => !need || !hidden.has(need)).map(([, card]) => card());
+}
 
-export const AGENT_ACTIVITY: AgentActivity[] = [
-  { description: 'Vikram Singh placed a bet of ₹15,000', time: '5m ago' },
-  { description: 'Arjun Sharma deposit ₹50,000 — Pending', time: '12m ago' },
-  { description: 'Priya Patel withdrawal ₹25,000 — Approved', time: '28m ago' },
-  { description: 'Sneha Kapoor KYC verified successfully', time: '1h ago' },
-  { description: 'Rahul Verma account suspended', time: '2h ago' },
-];
+const share = (part: number, total: number) =>
+  total > 0 ? `${((part / total) * 100).toFixed(1)}%` : '0%';
 
-export const AGENT_TRANSACTIONS: AgentTransaction[] = [
-  { user: 'Arjun Sharma', meta: 'Deposit · UPI · 12m ago', amount: '+₹50,000', direction: 'in', status: 'Pending' },
-  { user: 'Priya Patel', meta: 'Withdrawal · Bank · 28m ago', amount: '-₹25,000', direction: 'out', status: 'Success' },
-  { user: 'Vikram Singh', meta: 'Deposit · NEFT · 1h ago', amount: '+₹75,000', direction: 'in', status: 'Success' },
-  { user: 'Sneha Kapoor', meta: 'Bet Win · Wallet · 2h ago', amount: '+₹12,400', direction: 'in', status: 'Success' },
-];
+export function agentOverview(data: MyDashboard): OverviewTile[] {
+  const o = data.overview;
+  const growth =
+    o.newLastMonth > 0
+      ? `${o.newThisMonth >= o.newLastMonth ? '+' : ''}${formatPercent(((o.newThisMonth - o.newLastMonth) / o.newLastMonth) * 100)}`
+      : 'This month';
+  return [
+    { label: 'Total Users', value: formatCount(o.totalUsers), share: o.totalUsers > 0 ? '100%' : '0%', color: 'var(--color-primary)' },
+    { label: 'Active Today', value: formatCount(o.activeToday), share: share(o.activeToday, o.totalUsers), color: 'var(--color-success)' },
+    { label: 'KYC Verified', value: formatCount(o.kycVerified), share: share(o.kycVerified, o.totalUsers), color: 'var(--color-primary-light)' },
+    { label: 'KYC Pending', value: formatCount(o.kycPending), share: share(o.kycPending, o.totalUsers), color: 'var(--color-warning)' },
+    { label: 'Suspended', value: formatCount(o.suspended), share: share(o.suspended, o.totalUsers), color: 'var(--color-danger)' },
+    { label: 'New This Month', value: formatCount(o.newThisMonth), share: growth, color: '#8b5cf6' },
+  ];
+}
 
-export const AGENT_TXN_TONE: Record<AgentTransaction['status'], BadgeTone> = {
-  Success: 'success',
+export function commissionWeek(data: MyDashboard): BarGroup[] {
+  return data.commissionWeek.map((day) => ({
+    label: new Date(`${day.date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short' }),
+    values: [day.commission],
+  }));
+}
+
+export const TXN_TONE: Record<string, BadgeTone> = {
+  Completed: 'success',
   Pending: 'warning',
+  Failed: 'danger',
 };

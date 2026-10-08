@@ -4,6 +4,8 @@ import type { RoleId } from '../../config/roles';
 export type AuthUser = {
   username: string;
   roleId: RoleId;
+  /** The account's own name, shown in the sidebar and topbar; '' until set. */
+  name?: string;
 };
 
 export type Credentials = {
@@ -26,6 +28,8 @@ export type AuthContextValue = {
    * token (including the one this session was using) and returns new ones.
    */
   setTokens: (accessToken: string, refreshToken: string) => void;
+  /** Called after the profile is edited so the shell shows the new name at once. */
+  setDisplayName: (name: string) => void;
 };
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

@@ -12,11 +12,11 @@
 
 /* Partner payments panel */
 .partners {
-  border: var(--hairline) solid rgba(33, 150, 243, 0.25);
+  border: var(--hairline) solid rgba(var(--color-primary-rgb), 0.25);
   border-radius: var(--radius-lg);
   background-image: linear-gradient(
     170.35deg,
-    rgba(33, 150, 243, 0.1) 0%,
+    rgba(var(--color-primary-rgb), 0.1) 0%,
     rgba(33, 168, 187, 0.08) 50%,
     rgba(34, 197, 94, 0.06) 100%
   );
@@ -46,14 +46,14 @@
 
 .manage {
   flex: none;
-  border-color: rgba(33, 150, 243, 0.3);
+  border-color: rgba(var(--color-primary-rgb), 0.3);
   background-color: var(--color-primary-tint);
   color: var(--color-primary);
   padding: var(--space-3) var(--space-6);
 }
 
 .manage:hover {
-  background-color: rgba(33, 150, 243, 0.22);
+  background-color: rgba(var(--color-primary-rgb), 0.22);
   color: var(--color-primary);
 }
 
@@ -193,9 +193,15 @@
 }
 
 .ref {
+  display: inline-block;
+  max-width: 300px;
+  overflow: hidden;
   color: var(--color-text-muted);
   font-family: var(--font-mono);
   font-size: var(--font-size-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .rowActions {
@@ -241,4 +247,33 @@
   .actions {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* A staff account's own wallet, with the Fund Transfer action. */
+.myWallet {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-7);
+  border: var(--border-hairline);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  padding: var(--space-7) var(--space-8);
+}
+
+.myWalletLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.myWalletValue {
+  color: var(--color-text);
+  font-size: 22px;
+  font-weight: var(--font-weight-bold);
+  line-height: 32px;
+}
+
+.myWalletNote {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-2xs);
 }

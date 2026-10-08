@@ -1,5 +1,7 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AlertTriangleIcon, BanIcon, EyeIcon, RefreshIcon, RiskIcon } from '../../components/icons';
 import { Badge } from '../../components/ui/Badge/Badge';
 import { Button } from '../../components/ui/Button/Button';
@@ -19,14 +21,54 @@ import styles from './RiskPage.module.css';
 /** Risk console — node 112:6245. */
 export function RiskPage() {
   const { accessToken } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<ApiRiskStats | null>(null);
   const [rows, setRows] = useState<ExposureRow[]>([]);
   const [panels, setPanels] = useState<ApiRiskPanels | null>(null);
   const [pending, setPending] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Live: exposure, market status and wallet requests refresh this page as they happen.
+  useLiveRefresh(['odds', 'matches:changed', 'admin:changed'], () => setReloadKey((key) => key + 1));
   const [rowPending, setRowPending] = useState<string | null>(null);
   const [suspendingAll, setSuspendingAll] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanNote, setScanNote] = useState<string | null>(null);
+  const [resolving, setResolving] = useState<string | null>(null);
+
+  /** Runs the detection rules now (they also run on the server every 10 minutes). */
+  const runScan = async () => {
+    if (!accessToken) return;
+    setScanning(true);
+    setScanNote(null);
+    try {
+      const { result } = await riskApi.scan(accessToken);
+      setScanNote(
+        result.newFlags || result.newPatterns
+          ? `Scan found ${result.newFlags} new flagged user(s) and ${result.newPatterns} new pattern(s).`
+          : 'Scan complete — nothing new.',
+      );
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Unable to run the scan.');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const resolve = async (id: string, kind: 'flag' | 'pattern') => {
+    if (!accessToken) return;
+    setResolving(id);
+    try {
+      if (kind === 'flag') await riskApi.resolveFlag(id, accessToken);
+      else await riskApi.resolvePattern(id, accessToken);
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : 'Unable to resolve this item.');
+    } finally {
+      setResolving(null);
+    }
+  };
 
   useEffect(() => {
     if (!accessToken) return;
@@ -133,7 +175,12 @@ export function RiskPage() {
       header: 'Actions',
       render: (row) => (
         <div className={styles.rowActions}>
-          <Button className={styles.view} size="xs" aria-label={`View ${row.market}`}>
+          <Button
+            className={styles.view}
+            size="xs"
+            aria-label={`View ${row.market}`}
+            onClick={() => navigate('../markets', { relative: 'path', state: { eventId: row.eventId } })}
+          >
             <EyeIcon size={12} />
           </Button>
           {row.level === 'Critical' ? (
@@ -202,6 +249,15 @@ export function RiskPage() {
         />
       </SectionCard>
 
+      <div className={styles.scanBar}>
+        <p className={styles.scanText}>
+          {scanNote ?? 'Users and patterns below are found automatically from bets, wallet activity and sign-ins (every 10 minutes).'}
+        </p>
+        <Button className={styles.refresh} size="xs" icon={<RefreshIcon size={12} />} disabled={scanning} onClick={() => void runScan()}>
+          {scanning ? 'Scanning…' : 'Run Scan'}
+        </Button>
+      </div>
+
       <div className={styles.panels}>
         {panelList.map((panel) => (
           <section
@@ -216,9 +272,22 @@ export function RiskPage() {
             <ul className={styles.panelList}>
               {panel.items.length === 0 ? <li className={styles.panelItem}>Nothing to review.</li> : null}
               {panel.items.map((item) => (
-                <li key={item} className={styles.panelItem}>
+                <li key={item.id} className={styles.panelItem}>
                   <AlertTriangleIcon className={styles.panelIcon} size={12} />
-                  {item}
+                  <span className={styles.panelText}>
+                    {item.text}
+                    {item.detail ? <span className={styles.panelDetail}>{item.detail}</span> : null}
+                  </span>
+                  {item.resolve ? (
+                    <button
+                      type="button"
+                      className={styles.resolve}
+                      disabled={resolving !== null}
+                      onClick={() => void resolve(item.id, item.resolve!)}
+                    >
+                      {resolving === item.id ? '…' : 'Resolve'}
+                    </button>
+                  ) : null}
                 </li>
               ))}
             </ul>

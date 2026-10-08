@@ -1,3 +1,4 @@
+import { useLiveRefresh } from '../../lib/realtime';
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { BanIcon, CheckCircleIcon, EyeIcon, RefreshIcon } from '../../components/icons';
@@ -33,6 +34,8 @@ export function BettingPage() {
   const [syncing, setSyncing] = useState(false);
   const [suspendingId, setSuspendingId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Live: odds, match status and new bets refresh this page as they happen.
+  useLiveRefresh(['odds', 'matches:changed', 'admin:changed'], () => setReloadKey((key) => key + 1));
 
   useEffect(() => {
     if (!accessToken) return;
@@ -74,7 +77,7 @@ export function BettingPage() {
     }
   };
 
-  const handleToggleStatus = async (match: ApiMatch, status: 'Live' | 'Completed') => {
+  const handleToggleStatus = async (match: ApiMatch, status: 'Live' | 'Suspended') => {
     if (!accessToken) return;
     setSuspendingId(match._id);
     try {
@@ -184,17 +187,17 @@ export function BettingPage() {
                     <Button className={styles.view} size="xs" icon={<EyeIcon size={12} />} onClick={() => setOpen(match)}>
                       View
                     </Button>
-                    {match.status === 'Live' ? (
+                    {match.status === 'Live' || (match.provider === 'diamond' && match.status === 'Upcoming') ? (
                       <Button
                         className={styles.suspend}
                         size="xs"
                         icon={<BanIcon size={12} />}
-                        onClick={() => handleToggleStatus(match, 'Completed')}
+                        onClick={() => handleToggleStatus(match, 'Suspended')}
                         disabled={suspendingId === match._id}
                       >
                         Suspend
                       </Button>
-                    ) : match.status !== 'Settled' ? (
+                    ) : match.status !== 'Settled' && match.status !== 'Completed' ? (
                       <Button
                         variant="primary"
                         size="xs"
@@ -202,7 +205,7 @@ export function BettingPage() {
                         onClick={() => handleToggleStatus(match, 'Live')}
                         disabled={suspendingId === match._id}
                       >
-                        Activate
+                        {match.provider === 'diamond' ? 'Resume' : 'Activate'}
                       </Button>
                     ) : null}
                   </div>

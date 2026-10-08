@@ -13,7 +13,8 @@ export type EventFormModalProps = {
   onCreate: (payload: CreateEventPayload) => Promise<void>;
 };
 
-const EMPTY = { sport: '', name: '', league: '', emoji: '🏆', startTime: '' };
+/** Only cricket is open for betting for now, so every event is a cricket event. */
+const EMPTY = { sport: 'Cricket', name: '', league: '', emoji: '🏏', startTime: '' };
 
 /** Add Event dialog — there's no design node for this yet, so it borrows the standard form-dialog chrome. */
 export function EventFormModal({ onClose, onCreate }: EventFormModalProps) {
@@ -57,13 +58,7 @@ export function EventFormModal({ onClose, onCreate }: EventFormModalProps) {
     <Modal title="Add Event" subtitle="Create a new sporting fixture" onClose={onClose}>
       <form onSubmit={handleSubmit}>
         <div className={styles.grid} style={{ paddingTop: 0 }}>
-          <TextField
-            label="Sport *"
-            labelCase="caps"
-            placeholder="e.g. Cricket"
-            value={form.sport}
-            onChange={(e) => set('sport')(e.target.value)}
-          />
+          <TextField label="Sport *" labelCase="caps" value={form.sport} readOnly disabled />
           <TextField
             label="Event Name *"
             labelCase="caps"

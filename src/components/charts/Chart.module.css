@@ -1,11 +1,19 @@
 .chart {
   display: block;
   width: 100%;
+  /* Kept visible for the edge axis labels; the scale keeps the data itself inside the plot. */
   overflow: visible;
 }
 
 .grid {
   stroke: var(--color-border-soft);
+  stroke-width: 1;
+}
+
+/* The zero line, drawn stronger once the axis runs below it. */
+.zero {
+  stroke: var(--color-text-muted);
+  stroke-opacity: 0.5;
   stroke-width: 1;
 }
 

@@ -36,6 +36,11 @@ export type NavItem = {
   segment: string;
   label: string;
   icon: ComponentType<IconProps>;
+  /**
+   * The Permissions-page grant (group, permission) a staff role needs at
+   * "View" to see this entry; super-admin always sees it.
+   */
+  permission?: readonly [string, string];
 };
 
 export type RoleDefinition = {
@@ -70,20 +75,20 @@ export type RoleDefinition = {
  */
 const NAV = {
   dashboard: { segment: '', label: 'Dashboard', icon: LayoutDashboardIcon },
-  users: { segment: 'users', label: 'Users', icon: UsersIcon },
-  franchises: { segment: 'franchise', label: 'Franchise', icon: BuildingIcon },
-  superAgents: { segment: 'super-agent', label: 'Super Agent', icon: UsersCogIcon },
-  agents: { segment: 'agent', label: 'Agent', icon: UserIcon },
-  wallet: { segment: 'wallet', label: 'Wallet', icon: WalletIcon },
-  transactions: { segment: 'transactions', label: 'Transactions', icon: TransactionsIcon },
+  users: { segment: 'users', label: 'Users', icon: UsersIcon, permission: ['userManagement', 'userList'] as const },
+  franchises: { segment: 'franchise', label: 'Franchise', icon: BuildingIcon, permission: ['userManagement', 'userList'] as const },
+  superAgents: { segment: 'super-agent', label: 'Super Agent', icon: UsersCogIcon, permission: ['userManagement', 'userList'] as const },
+  agents: { segment: 'agent', label: 'Agent', icon: UserIcon, permission: ['userManagement', 'userList'] as const },
+  wallet: { segment: 'wallet', label: 'Wallet', icon: WalletIcon, permission: ['finance', 'walletBalance'] as const },
+  transactions: { segment: 'transactions', label: 'Transactions', icon: TransactionsIcon, permission: ['finance', 'walletBalance'] as const },
   betting: { segment: 'betting', label: 'Betting', icon: BettingIcon },
-  events: { segment: 'events', label: 'Events', icon: EventsIcon },
-  markets: { segment: 'markets', label: 'Markets', icon: MarketsIcon },
+  events: { segment: 'events', label: 'Events', icon: EventsIcon, permission: ['bettingMarkets', 'events'] as const },
+  markets: { segment: 'markets', label: 'Markets', icon: MarketsIcon, permission: ['bettingMarkets', 'markets'] as const },
   risk: { segment: 'risk', label: 'Risk', icon: RiskIcon },
-  commission: { segment: 'commission', label: 'Commission', icon: CommissionIcon },
+  commission: { segment: 'commission', label: 'Commission', icon: CommissionIcon, permission: ['finance', 'commission'] as const },
   partnership: { segment: 'partnership', label: 'Partnership', icon: PartnershipIcon },
-  reports: { segment: 'reports', label: 'Reports', icon: ReportsIcon },
-  analytics: { segment: 'analytics', label: 'Analytics', icon: AnalyticsIcon },
+  reports: { segment: 'reports', label: 'Reports', icon: ReportsIcon, permission: ['reportsAnalytics', 'reports'] as const },
+  analytics: { segment: 'analytics', label: 'Analytics', icon: AnalyticsIcon, permission: ['reportsAnalytics', 'analytics'] as const },
   cms: { segment: 'cms', label: 'CMS', icon: CmsIcon },
   notifications: { segment: 'notifications', label: 'Notifications', icon: BellIcon },
   security: { segment: 'security', label: 'Security', icon: SecurityIcon },
@@ -91,7 +96,7 @@ const NAV = {
   profile: { segment: 'profile', label: 'Profile', icon: UserIcon },
   support: { segment: 'support-tickets', label: 'Support Tickets', icon: SupportIcon },
   /** Contact channels rather than a ticket queue — node 139:90076. */
-  contactSupport: { segment: 'support', label: 'Support', icon: SupportIcon },
+  contactSupport: { segment: 'support', label: 'Support', icon: SupportIcon, permission: ['support', 'contactSupport'] as const },
   permissions: { segment: 'permissions', label: 'Permissions', icon: ShieldCheckIcon },
 } satisfies Record<string, NavItem>;
 
@@ -152,8 +157,13 @@ export const ROLES: RoleDefinition[] = [
       NAV.users,
       NAV.superAgents,
       NAV.agents,
+      NAV.wallet,
+      NAV.transactions,
+      NAV.events,
+      NAV.markets,
       NAV.commission,
       NAV.reports,
+      NAV.analytics,
       NAV.settings,
       NAV.profile,
       NAV.contactSupport,
@@ -176,8 +186,11 @@ export const ROLES: RoleDefinition[] = [
       NAV.agents,
       NAV.wallet,
       NAV.transactions,
+      NAV.events,
+      NAV.markets,
       NAV.commission,
       NAV.reports,
+      NAV.analytics,
       NAV.settings,
       NAV.profile,
       NAV.contactSupport,
@@ -199,8 +212,11 @@ export const ROLES: RoleDefinition[] = [
       NAV.users,
       NAV.wallet,
       NAV.transactions,
+      NAV.events,
+      NAV.markets,
       NAV.commission,
       NAV.reports,
+      NAV.analytics,
       NAV.settings,
       NAV.profile,
       NAV.contactSupport,

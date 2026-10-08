@@ -1,70 +1,145 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { CheckCircleIcon } from '../../components/icons';
 import { Button } from '../../components/ui/Button/Button';
 import { Meter } from '../../components/ui/ProgressBar/ProgressBar';
 import { Switch } from '../../components/ui/Switch/Switch';
+import { ApiRequestError } from '../../lib/api';
+import type { PermissionGroup } from '../../lib/api';
+import { permissionsApi } from '../../lib/api/permissions';
+import type { PermissionMatrix } from '../../lib/api/permissions';
 import { cx } from '../../lib/cx';
-import {
-  LEGEND,
-  PERMISSION_GROUPS,
-  ROLES,
-  TOTAL_PERMISSIONS,
-} from './permissionsData';
+import { useAuth } from '../auth/authContext';
+import { GROUP_EMOJI, LEGEND, ROLES } from './permissionsData';
 import type { Grant, RoleKey } from './permissionsData';
 import styles from './PermissionsPage.module.css';
 
-/** Grants keyed by "groupIndex:permissionIndex" for the role being edited. */
+/** Grants keyed by "groupKey.permissionKey", per role. */
 type GrantMap = Record<string, Grant>;
+type Drafts = Record<RoleKey, GrantMap>;
 
-const key = (group: number, row: number) => `${group}:${row}`;
+const cellKey = (groupKey: string, permissionKey: string) => `${groupKey}.${permissionKey}`;
 
-function readGrants(role: RoleKey): GrantMap {
+const errorMessage = (err: unknown) =>
+  err instanceof ApiRequestError ? err.message : 'Unable to reach the server.';
+
+function toGrantMap(groups: PermissionGroup[]): GrantMap {
   const map: GrantMap = {};
-  PERMISSION_GROUPS.forEach((group, g) =>
-    group.permissions.forEach((permission, p) => {
-      map[key(g, p)] = permission.grants[role];
+  groups.forEach((group) =>
+    group.permissions.forEach((permission) => {
+      map[cellKey(group.key, permission.key)] = permission.grant;
     }),
   );
   return map;
 }
 
-/** Role permission matrix — node 112:12758. */
-export function PermissionsPage() {
-  const [role, setRole] = useState<RoleKey>('superAgent');
-  const [grants, setGrants] = useState<GrantMap>(() => readGrants('superAgent'));
-  const [dirty, setDirty] = useState(false);
+const toDrafts = (matrix: PermissionMatrix): Drafts => ({
+  superAgent: toGrantMap(matrix.superAgent),
+  agent: toGrantMap(matrix.agent),
+  franchise: toGrantMap(matrix.franchise),
+});
 
-  const selectRole = (next: RoleKey) => {
-    setRole(next);
-    setGrants(readGrants(next));
-    setDirty(false);
+/** Cells whose draft differs from what the server holds. */
+function changedCells(saved: Drafts, drafts: Drafts) {
+  return ROLES.flatMap(({ key: roleKey }) =>
+    Object.entries(drafts[roleKey])
+      .filter(([cell, grant]) => saved[roleKey][cell] !== grant)
+      .map(([cell, grant]) => {
+        const [groupKey, permissionKey] = cell.split('.');
+        return { roleKey, groupKey, permissionKey, grant };
+      }),
+  );
+}
+
+/** Role permission matrix — node 112:12758. Reads and saves the live matrix (/api/permissions). */
+export function PermissionsPage() {
+  const { accessToken } = useAuth();
+  const [role, setRole] = useState<RoleKey>('superAgent');
+  /** Group/permission structure, the same for every role. */
+  const [groups, setGroups] = useState<PermissionGroup[]>([]);
+  const [saved, setSaved] = useState<Drafts | null>(null);
+  const [drafts, setDrafts] = useState<Drafts | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!accessToken) return;
+    setLoading(true);
+    try {
+      const { roles } = await permissionsApi.matrix(accessToken);
+      setGroups(roles.superAgent);
+      setSaved(toDrafts(roles));
+      setDrafts(toDrafts(roles));
+      setError(null);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const changes = useMemo(() => (saved && drafts ? changedCells(saved, drafts) : []), [saved, drafts]);
+  const dirty = changes.length > 0;
+  const grants: GrantMap = drafts?.[role] ?? {};
+  const totalPermissions = groups.reduce((sum, group) => sum + group.permissions.length, 0);
+
+  const enabledCount = (map: GrantMap) => Object.values(map).filter((grant) => grant.includes('E')).length;
+
+  const setCell = (cell: string, next: Grant) => {
+    setDrafts((current) => (current ? { ...current, [role]: { ...current[role], [cell]: next } } : current));
+    setNotice(null);
+  };
+
+  const toggle = (cell: string, flag: 'E' | 'V' | 'X') => {
+    const value = grants[cell] ?? '';
+    // Turning the master off clears view and edit with it.
+    if (flag === 'E') setCell(cell, value.includes('E') ? '' : 'EV');
+    else setCell(cell, value.includes(flag) ? value.replace(flag, '') : `${value}${flag}`);
+  };
+
+  const toggleGroup = (group: PermissionGroup, allOn: boolean) => {
+    setDrafts((current) => {
+      if (!current) return current;
+      const next = { ...current[role] };
+      group.permissions.forEach((permission) => {
+        next[cellKey(group.key, permission.key)] = allOn ? '' : 'EV';
+      });
+      return { ...current, [role]: next };
+    });
+    setNotice(null);
+  };
+
+  /** The API takes one cell per call, so each change is sent in turn, then the matrix is reloaded. */
+  const save = async () => {
+    if (!accessToken || !dirty) return;
+    setSaving(true);
+    setError(null);
+    let done = 0;
+    try {
+      for (const change of changes) {
+        // eslint-disable-next-line no-await-in-loop
+        await permissionsApi.setGrant(accessToken, change.roleKey, change.groupKey, change.permissionKey, change.grant);
+        done += 1;
+      }
+      setNotice(`Saved ${done} permission change${done === 1 ? '' : 's'}.`);
+    } catch (err) {
+      setError(`${errorMessage(err)} (${done} of ${changes.length} changes saved)`);
+    } finally {
+      setSaving(false);
+      await load();
+    }
   };
 
   const active = ROLES.find((item) => item.key === role)!;
 
-  /** Live counts so the summary cards track edits, not just the seed data. */
-  const counts = useMemo(() => {
-    const perGroup = PERMISSION_GROUPS.map((group, g) =>
-      group.permissions.filter((_, p) => grants[key(g, p)].includes('E')).length,
-    );
-    return { perGroup, total: perGroup.reduce((sum, n) => sum + n, 0) };
-  }, [grants]);
-
-  const toggle = (g: number, p: number, flag: 'E' | 'V' | 'X') => {
-    setGrants((current) => {
-      const value = current[key(g, p)];
-      let next: Grant;
-      if (flag === 'E') {
-        // Turning the master off clears view and edit with it.
-        next = value.includes('E') ? '' : 'EV';
-      } else {
-        next = value.includes(flag) ? value.replace(flag, '') : `${value}${flag}`;
-      }
-      return { ...current, [key(g, p)]: next };
-    });
-    setDirty(true);
-  };
+  if (loading && !drafts) return <p className={styles.status}>Loading permissions…</p>;
+  if (!drafts) return <p className={cx(styles.status, styles.statusError)}>{error}</p>;
 
   return (
     <div className={styles.page}>
@@ -78,22 +153,20 @@ export function PermissionsPage() {
         <Button
           variant="primary"
           size="xs"
-          disabled={!dirty}
+          disabled={!dirty || saving}
           icon={<CheckCircleIcon size={12.992} />}
-          onClick={() => setDirty(false)}
+          onClick={() => void save()}
         >
-          Save Changes
+          {saving ? 'Saving…' : dirty ? `Save Changes (${changes.length})` : 'Save Changes'}
         </Button>
       </div>
 
+      {error ? <p className={cx(styles.status, styles.statusError)} role="alert">{error}</p> : null}
+      {notice ? <p className={cx(styles.status, styles.statusOk)} role="status">{notice}</p> : null}
+
       <div className={styles.roles}>
         {ROLES.map((item) => {
-          const enabled = item.key === role ? counts.total : undefined;
-          const shown = enabled ?? PERMISSION_GROUPS.reduce(
-            (sum, group) =>
-              sum + group.permissions.filter((p) => p.grants[item.key].includes('E')).length,
-            0,
-          );
+          const shown = enabledCount(drafts[item.key]);
           return (
             <button
               key={item.key}
@@ -101,7 +174,7 @@ export function PermissionsPage() {
               aria-pressed={item.key === role}
               className={cx(styles.role, item.key === role && styles.roleActive)}
               style={{ '--role-rgb': item.rgb } as CSSProperties}
-              onClick={() => selectRole(item.key)}
+              onClick={() => setRole(item.key)}
             >
               <span className={styles.roleHead}>
                 <span className={styles.roleEmoji} aria-hidden="true">
@@ -115,12 +188,12 @@ export function PermissionsPage() {
               <Meter
                 className={styles.roleMeter}
                 label={`${item.name} permissions`}
-                percent={(shown / TOTAL_PERMISSIONS) * 100}
+                percent={totalPermissions ? (shown / totalPermissions) * 100 : 0}
                 fill="rgb(var(--role-rgb))"
                 height={3.997}
               />
               <span className={styles.roleCount}>
-                {shown} / {TOTAL_PERMISSIONS} permissions enabled
+                {shown} / {totalPermissions} permissions enabled
               </span>
             </button>
           );
@@ -138,23 +211,25 @@ export function PermissionsPage() {
         ))}
       </div>
 
-      {PERMISSION_GROUPS.map((group, g) => {
-        const allOn = group.permissions.every((_, p) => grants[key(g, p)].includes('E'));
+      {groups.map((group) => {
+        const cells = group.permissions.map((permission) => cellKey(group.key, permission.key));
+        const allOn = cells.every((cell) => (grants[cell] ?? '').includes('E'));
+        const groupEnabled = cells.filter((cell) => (grants[cell] ?? '').includes('E')).length;
         return (
           <section
-            key={group.name}
+            key={group.key}
             className={styles.group}
             style={{ '--role-rgb': active.rgb } as CSSProperties}
           >
             <header className={styles.groupHead}>
               <div className={styles.groupTitle}>
                 <span className={styles.groupEmoji} aria-hidden="true">
-                  {group.emoji}
+                  {GROUP_EMOJI[group.key] ?? '•'}
                 </span>
                 <div>
                   <p className={styles.groupName}>{group.name}</p>
                   <p className={styles.groupCount}>
-                    {counts.perGroup[g]} of {group.permissions.length} enabled
+                    {groupEnabled} of {group.permissions.length} enabled
                   </p>
                 </div>
               </div>
@@ -163,16 +238,7 @@ export function PermissionsPage() {
                 <Switch
                   className={styles.switch}
                   checked={allOn}
-                  onChange={() =>
-                    setGrants((current) => {
-                      const next = { ...current };
-                      group.permissions.forEach((_, p) => {
-                        next[key(g, p)] = allOn ? '' : 'EV';
-                      });
-                      setDirty(true);
-                      return next;
-                    })
-                  }
+                  onChange={() => toggleGroup(group, allOn)}
                   label={`Toggle all ${group.name} permissions`}
                   size="sm"
                 />
@@ -186,12 +252,13 @@ export function PermissionsPage() {
               <span className={styles.center}>Edit</span>
             </div>
 
-            {group.permissions.map((permission, p) => {
-              const value = grants[key(g, p)];
+            {group.permissions.map((permission) => {
+              const cell = cellKey(group.key, permission.key);
+              const value = grants[cell] ?? '';
               const enabled = value.includes('E');
               return (
                 <div
-                  key={permission.name}
+                  key={permission.key}
                   className={cx(styles.row, styles.permission, !enabled && styles.rowOff)}
                 >
                   <div>
@@ -202,7 +269,7 @@ export function PermissionsPage() {
                     <Switch
                       className={styles.switch}
                       checked={enabled}
-                      onChange={() => toggle(g, p, 'E')}
+                      onChange={() => toggle(cell, 'E')}
                       label={`Enable ${permission.name}`}
                       size="sm"
                     />
@@ -211,7 +278,7 @@ export function PermissionsPage() {
                     <Switch
                       className={styles.switch}
                       checked={value.includes('V')}
-                      onChange={() => toggle(g, p, 'V')}
+                      onChange={() => toggle(cell, 'V')}
                       label={`View ${permission.name}`}
                       size="xs"
                     />
@@ -220,7 +287,7 @@ export function PermissionsPage() {
                     <Switch
                       className={styles.switch}
                       checked={value.includes('X')}
-                      onChange={() => toggle(g, p, 'X')}
+                      onChange={() => toggle(cell, 'X')}
                       label={`Edit ${permission.name}`}
                       size="xs"
                     />

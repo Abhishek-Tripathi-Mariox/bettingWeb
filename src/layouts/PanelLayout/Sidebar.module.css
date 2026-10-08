@@ -72,7 +72,7 @@
 }
 
 .identityChip.brand {
-  --role-rgb: 33, 150, 243;
+  --role-rgb: var(--color-primary-rgb);
 }
 
 .identityChip.info {
@@ -172,4 +172,11 @@
   .sidebarOpen {
     transform: translateX(0);
   }
+}
+
+.navEmpty {
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
 }

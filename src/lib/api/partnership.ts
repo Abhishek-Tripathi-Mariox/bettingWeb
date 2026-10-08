@@ -12,7 +12,12 @@ export type ApiPartner = {
   /** Percent, e.g. 20 = 20%. */
   revShare: number;
   monthlyFee: number;
+  /** Stake by this partner's players (voided bets excluded), all time — computed server-side. */
   betVolume: number;
+  /** Players who signed up with `referralCode`. */
+  playerCount: number;
+  /** Sign-up code players enter to join through this partner. */
+  referralCode: string;
   status: ApiPartnerStatus;
   since: string;
   contact: string;
@@ -66,6 +71,7 @@ export type ApiPartnerSettlement = {
   period: string;
   amount: number;
   status: 'Pending' | 'Paid';
+  paidAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -95,4 +101,8 @@ export const partnershipApi = {
 
   settlements: (accessToken?: string | null) =>
     apiRequest<{ settlements: ApiPartnerSettlement[] }>('/partnership/settlements', { accessToken }),
+
+  /** Marks a finished month's revenue share as paid out. */
+  paySettlement: (id: string, accessToken?: string | null) =>
+    apiRequest<{ settlement: ApiPartnerSettlement }>(`/partnership/settlements/${id}/pay`, { method: 'POST', accessToken }),
 };

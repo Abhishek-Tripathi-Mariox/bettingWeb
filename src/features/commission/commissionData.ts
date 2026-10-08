@@ -40,7 +40,46 @@ export function mapCommissionRows(items: ApiCommission[]): CommissionRow[] {
 }
 
 /** Stat cards derived from the currently loaded (filtered) commission rows — same 4 slots as the dummy `COMMISSION_STATS`. */
-export function commissionStats(items: ApiCommission[]): StatCardProps[] {
+export function commissionStats(items: ApiCommission[], viewerUsername?: string): StatCardProps[] {
+  const sum = (rows: ApiCommission[]) => rows.reduce((acc, item) => acc + item.commission, 0);
+  // A network role reads this page as "what I earn" first, then what its downline earns.
+  if (viewerUsername) {
+    const isMine = (item: ApiCommission) => typeof item.entity !== 'string' && item.entity.username === viewerUsername;
+    const mine = items.filter(isMine);
+    const downline = items.filter((item) => !isMine(item));
+    const myTurnover = mine.filter((item) => item.status === 'Pending').reduce((acc, item) => acc + item.turnover, 0);
+    return [
+      {
+        label: 'My Commission',
+        value: formatMoney(sum(mine.filter((item) => item.status === 'Pending'))),
+        caption: `On ${formatMoney(myTurnover)} turnover, not yet settled`,
+        icon: CommissionIcon,
+        accent: 'blue',
+        tinted: true,
+      },
+      {
+        label: 'Paid to Me',
+        value: formatMoney(sum(mine.filter((item) => item.status === 'Settled'))),
+        caption: 'Settled into my wallet',
+        icon: GiftIcon,
+        accent: 'green',
+      },
+      {
+        label: "My Downline's Commission",
+        value: formatMoney(sum(downline)),
+        caption: downline.length ? `${downline.length} row${downline.length === 1 ? '' : 's'} below me` : 'Nobody below me earns commission',
+        icon: UsersCogIcon,
+        accent: 'cyan',
+      },
+      {
+        label: 'Pending Settlement',
+        value: formatMoney(sum(items.filter((item) => item.status === 'Pending'))),
+        caption: 'Awaiting settlement by admin',
+        icon: BuildingIcon,
+        accent: 'yellow',
+      },
+    ];
+  }
   const total = items.reduce((sum, item) => sum + item.commission, 0);
   const franchise = items.filter((item) => item.level === 'Franchise').reduce((sum, item) => sum + item.commission, 0);
   const agent = items.filter((item) => item.level === 'Agent').reduce((sum, item) => sum + item.commission, 0);
@@ -81,48 +120,10 @@ export function commissionSplit(items: ApiCommission[]): DonutSlice[] {
   })).filter((slice) => slice.value > 0);
 }
 
-export const COMMISSION_STATS: StatCardProps[] = [
-  {
-    label: 'Total Commission',
-    value: '₹72.4L',
-    caption: 'This month',
-    delta: '+18.4% vs yesterday',
-    tone: 'up',
-    icon: CommissionIcon,
-    accent: 'blue',
-    tinted: true,
-  },
-  { label: 'Franchise Share', value: '₹30.4L', caption: '42%', icon: BuildingIcon, accent: 'cyan' },
-  {
-    label: 'Agent Share',
-    value: '₹20.3L',
-    caption: '28%',
-    delta: '+12.8% vs yesterday',
-    tone: 'up',
-    icon: UsersCogIcon,
-    accent: 'green',
-  },
-  { label: 'Pending Settlement', value: '₹8.4L', caption: 'Due tomorrow', icon: GiftIcon, accent: 'yellow' },
-];
 
 export const SETTLEMENT_TONE: Record<SettlementStatus, BadgeTone> = {
   Settled: 'info',
   Pending: 'warning',
 };
 
-/** The breakdown from node 112:6945. */
-export const COMMISSION_ROWS: CommissionRow[] = [
-  { id: 'CM1', entity: 'Mumbai Franchise', level: 'Franchise', turnover: '₹8.42Cr', rate: '15%', commission: '₹12.6L', status: 'Settled' },
-  { id: 'CM2', entity: 'Delhi Franchise', level: 'Franchise', turnover: '₹6.28Cr', rate: '15%', commission: '₹9.4L', status: 'Settled' },
-  { id: 'CM3', entity: 'Agent A-089', level: 'Agent', turnover: '₹2.84Cr', rate: '7%', commission: '₹1.99L', status: 'Pending' },
-  { id: 'CM4', entity: 'Super Agent SA-012', level: 'Super Agent', turnover: '₹4.12Cr', rate: '10%', commission: '₹4.12L', status: 'Pending' },
-  { id: 'CM5', entity: 'Bangalore Franchise', level: 'Franchise', turnover: '₹11.24Cr', rate: '15%', commission: '₹16.8L', status: 'Settled' },
-];
 
-/** Ring + legend on the right of the page — node 112:7481. */
-export const COMMISSION_SPLIT: DonutSlice[] = [
-  { label: 'Franchise', value: 42, color: '#2196f3' },
-  { label: 'Super Agent', value: 28, color: '#29b6f6' },
-  { label: 'Agent', value: 20, color: '#22c55e' },
-  { label: 'Platform', value: 10, color: '#facc15' },
-];

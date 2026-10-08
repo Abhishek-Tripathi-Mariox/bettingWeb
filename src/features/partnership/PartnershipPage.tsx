@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { EyeIcon, PencilIcon, PlusIcon } from '../../components/icons';
 import { Badge } from '../../components/ui/Badge/Badge';
 import { Button } from '../../components/ui/Button/Button';
@@ -6,52 +6,97 @@ import { DataTable } from '../../components/ui/DataTable/DataTable';
 import type { Column } from '../../components/ui/DataTable/DataTable';
 import { PillTabs } from '../../components/ui/PillTabs/PillTabs';
 import { StatCard } from '../../components/ui/StatCard/StatCard';
+import { useAuth } from '../auth/authContext';
+import { ApiRequestError } from '../../lib/api';
+import { partnershipApi } from '../../lib/api/partnership';
+import type { ApiPartner, ApiPartnerSettlement } from '../../lib/api/partnership';
+import { formatMoney } from '../../lib/format';
 import { PartnerDrawer } from './PartnerDrawer';
 import { PartnerFormModal } from './PartnerFormModal';
 import {
-  PARTNERS,
-  PARTNER_STATS,
   PARTNER_STATUS_TONE,
   PARTNER_TABS,
+  formatBetVolume,
+  formatRevShare,
+  formatSince,
+  partnerStats,
 } from './partnershipData';
-import type { Partner } from './partnershipData';
 import styles from './PartnershipPage.module.css';
 
 const TABS = PARTNER_TABS.map((label) => ({ label }));
 
+const errorMessage = (err: unknown) =>
+  err instanceof ApiRequestError ? err.message : 'Unable to reach the server.';
+
 /** Partnership directory — node 112:7569. */
 export function PartnershipPage() {
+  const { accessToken } = useAuth();
   const [tab, setTab] = useState<string>(PARTNER_TABS[0]);
-  const [rows, setRows] = useState<Partner[]>(PARTNERS);
+  const [partners, setPartners] = useState<ApiPartner[]>([]);
+  const [settlements, setSettlements] = useState<ApiPartnerSettlement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   /** null = closed, 'new' = Add Partnership, a row = Edit Partnership. */
-  const [form, setForm] = useState<Partner | 'new' | null>(null);
-  const [open, setOpen] = useState<Partner | null>(null);
+  const [form, setForm] = useState<ApiPartner | 'new' | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
 
-  const handleSubmit = (partner: Partner) => {
-    setRows((current) =>
-      current.some((item) => item.id === partner.id)
-        ? current.map((item) => (item.id === partner.id ? partner : item))
-        : [
-            ...current,
-            { ...partner, id: `P${String(current.length + 1).padStart(3, '0')}` },
-          ],
-    );
-    setForm(null);
-  };
+  const load = useCallback(async () => {
+    if (!accessToken) return;
+    setLoading(true);
+    try {
+      const [partnersRes, settlementsRes] = await Promise.all([
+        partnershipApi.listPartners(accessToken),
+        partnershipApi.settlements(accessToken),
+      ]);
+      setPartners(partnersRes.partners);
+      setSettlements(settlementsRes.settlements);
+      setError(null);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [accessToken]);
 
-  const columns: Column<Partner>[] = [
-    { key: 'id', header: 'ID', render: (row) => <span className={styles.code}>{row.id}</span> },
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const open = openId ? partners.find((partner) => partner._id === openId) ?? null : null;
+
+  const columns: Column<ApiPartner>[] = [
+    {
+      key: 'id',
+      header: 'ID',
+      render: (row) => <span className={styles.code}>{row._id.slice(-6).toUpperCase()}</span>,
+    },
     { key: 'name', header: 'Partner Name', render: (row) => <span className={styles.name}>{row.name}</span> },
-    { key: 'type', header: 'Type', render: (row) => <Badge tone="brand">{row.type}</Badge> },
-    { key: 'revShare', header: 'Rev Share', render: (row) => <span className={styles.revShare}>{row.revShare}</span> },
-    { key: 'fee', header: 'Monthly Fee', render: (row) => <span className={styles.fee}>{row.monthlyFee}</span> },
-    { key: 'volume', header: 'Bet Volume', render: (row) => <span className={styles.volume}>{row.betVolume}</span> },
+    { key: 'type', header: 'Type', render: (row) => <Badge tone="brand">{row.type || '—'}</Badge> },
+    {
+      key: 'revShare',
+      header: 'Rev Share',
+      render: (row) => <span className={styles.revShare}>{formatRevShare(row.revShare)}</span>,
+    },
+    {
+      key: 'fee',
+      header: 'Monthly Fee',
+      render: (row) => <span className={styles.fee}>{formatMoney(row.monthlyFee)}</span>,
+    },
+    {
+      key: 'volume',
+      header: 'Bet Volume',
+      render: (row) => <span className={styles.volume}>{formatBetVolume(row.betVolume)}</span>,
+    },
     {
       key: 'status',
       header: 'Status',
       render: (row) => <Badge tone={PARTNER_STATUS_TONE[row.status]}>{row.status}</Badge>,
     },
-    { key: 'since', header: 'Since', render: (row) => <span className={styles.since}>{row.since}</span> },
+    {
+      key: 'since',
+      header: 'Since',
+      render: (row) => <span className={styles.since}>{formatSince(row.since || row.createdAt)}</span>,
+    },
     {
       key: 'actions',
       header: 'Actions',
@@ -69,7 +114,7 @@ export function PartnershipPage() {
             className={styles.view}
             size="xs"
             icon={<EyeIcon size={12} />}
-            onClick={() => setOpen(row)}
+            onClick={() => setOpenId(row._id)}
           >
             View
           </Button>
@@ -81,7 +126,7 @@ export function PartnershipPage() {
   return (
     <div className={styles.page}>
       <div className={styles.stats}>
-        {PARTNER_STATS.map((stat) => (
+        {partnerStats(partners, settlements).map((stat) => (
           <StatCard key={stat.label} {...stat} />
         ))}
       </div>
@@ -99,13 +144,15 @@ export function PartnershipPage() {
           </Button>
         </div>
 
+        {error ? <p className={styles.since}>{error}</p> : null}
+
         <div className={styles.table}>
           <DataTable
             columns={columns}
-            rows={rows}
-            rowKey={(row) => row.id}
+            rows={partners}
+            rowKey={(row) => row._id}
             size="lg"
-            emptyMessage="No partnerships yet."
+            emptyMessage={loading ? 'Loading…' : 'No partnerships yet.'}
           />
         </div>
       </section>
@@ -113,11 +160,13 @@ export function PartnershipPage() {
       {open ? (
         <PartnerDrawer
           partner={open}
+          settlements={settlements}
           onEdit={() => {
             setForm(open);
-            setOpen(null);
+            setOpenId(null);
           }}
-          onClose={() => setOpen(null)}
+          onChanged={load}
+          onClose={() => setOpenId(null)}
         />
       ) : null}
 
@@ -125,7 +174,10 @@ export function PartnershipPage() {
         <PartnerFormModal
           partner={form === 'new' ? null : form}
           onClose={() => setForm(null)}
-          onSubmit={handleSubmit}
+          onSaved={() => {
+            setForm(null);
+            void load();
+          }}
         />
       ) : null}
     </div>

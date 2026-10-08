@@ -14,12 +14,3 @@ export const APP = {
   legal: `Protected by 256-bit SSL encryption · © ${YEAR} BetMaster Pro`,
   build: `BetMaster Pro v2.4.1 · © ${YEAR}`,
 } as const;
-
-/** Live-status figures shown in the topbar chip and the status bar. */
-export const PLATFORM_STATUS = {
-  liveMatches: 4,
-  api: 'API Connected',
-  db: 'DB: 24ms',
-  cpu: 'CPU: 38%',
-  uptime: 'Uptime: 99.9%',
-} as const;

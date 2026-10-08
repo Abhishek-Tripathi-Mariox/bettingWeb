@@ -83,8 +83,8 @@
 
 /* Unread rows sit on a brand wash; read rows fall back to a bare hairline. */
 .unread {
-  border: var(--hairline) solid rgba(33, 150, 243, 0.15);
-  background-color: rgba(33, 150, 243, 0.06);
+  border: var(--hairline) solid rgba(var(--color-primary-rgb), 0.15);
+  background-color: rgba(var(--color-primary-rgb), 0.06);
 }
 
 .read {

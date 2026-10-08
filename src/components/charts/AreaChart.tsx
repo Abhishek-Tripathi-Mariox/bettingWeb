@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { formatCompact, niceMax, ticks } from './chartScale';
+import { domainFor, formatCompact } from './chartScale';
 import styles from './Chart.module.css';
 
 export type ChartPoint = { label: string; value: number };
@@ -16,15 +16,17 @@ const WIDTH = 520;
 /** Revenue-style line with a soft gradient fill under it. */
 export function AreaChart({ data, color = 'var(--color-primary)', height = 200 }: AreaChartProps) {
   const gradientId = useId();
-  const max = niceMax(Math.max(...data.map((point) => point.value)));
+  const { min, max, ticks } = domainFor(data.map((point) => point.value));
   const plotWidth = WIDTH - PAD.left - PAD.right;
   const plotHeight = height - PAD.top - PAD.bottom;
 
   const x = (index: number) => PAD.left + (plotWidth / Math.max(1, data.length - 1)) * index;
-  const y = (value: number) => PAD.top + plotHeight - (value / max) * plotHeight;
+  const y = (value: number) => PAD.top + plotHeight - ((value - min) / (max - min)) * plotHeight;
 
+  // The fill closes on the zero line, so losses shade downward from it.
+  const baseline = y(0);
   const line = data.map((point, index) => `${index === 0 ? 'M' : 'L'}${x(index)} ${y(point.value)}`).join(' ');
-  const area = `${line} L${x(data.length - 1)} ${PAD.top + plotHeight} L${x(0)} ${PAD.top + plotHeight} Z`;
+  const area = `${line} L${x(data.length - 1)} ${baseline} L${x(0)} ${baseline} Z`;
 
   return (
     <svg
@@ -42,9 +44,9 @@ export function AreaChart({ data, color = 'var(--color-primary)', height = 200 }
         </linearGradient>
       </defs>
 
-      {ticks(max).map((tick) => (
+      {ticks.map((tick) => (
         <g key={tick}>
-          <line className={styles.grid} x1={PAD.left} x2={WIDTH - PAD.right} y1={y(tick)} y2={y(tick)} />
+          <line className={tick === 0 && min < 0 ? styles.zero : styles.grid} x1={PAD.left} x2={WIDTH - PAD.right} y1={y(tick)} y2={y(tick)} />
           <text className={`${styles.axis} ${styles.axisY}`} x={PAD.left - 8} y={y(tick) + 4}>
             {formatCompact(tick)}
           </text>

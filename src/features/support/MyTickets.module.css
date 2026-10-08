@@ -1,0 +1,147 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ticket {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'code subject status'
+    'code meta status';
+  align-items: center;
+  column-gap: var(--space-5);
+  width: 100%;
+  border: 0;
+  border-bottom: var(--border-hairline);
+  background: none;
+  padding: var(--space-5) var(--space-3);
+  text-align: left;
+  cursor: pointer;
+}
+
+li:last-child .ticket {
+  border-bottom: 0;
+}
+
+.ticket:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.code {
+  grid-area: code;
+  color: var(--color-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-2xs);
+}
+
+.subject {
+  grid-area: subject;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  grid-area: meta;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-2xs);
+}
+
+.ticket > :last-child {
+  grid-area: status;
+}
+
+.empty,
+.notice,
+.error {
+  margin: 0;
+  font-size: var(--font-size-xs);
+}
+
+.empty {
+  color: var(--color-text-muted);
+}
+
+.notice {
+  padding-bottom: var(--space-4);
+  color: var(--color-success);
+}
+
+.error {
+  padding: var(--space-3) 0;
+  color: var(--color-danger);
+}
+
+.form,
+.reply {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.footer {
+  display: flex;
+  gap: 10px;
+}
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: 320px;
+  overflow-y: auto;
+  padding-bottom: var(--space-5);
+}
+
+.fromMe,
+.fromSupport {
+  max-width: 85%;
+}
+
+.fromMe {
+  align-self: flex-end;
+}
+
+.fromSupport {
+  align-self: flex-start;
+}
+
+.bubbleMeta {
+  margin: 0 0 2px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-2xs);
+}
+
+.fromMe .bubbleMeta {
+  text-align: right;
+}
+
+.bubble {
+  margin: 0;
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+  white-space: pre-wrap;
+}
+
+.fromMe .bubble {
+  background-color: var(--color-primary-tint);
+}
+
+.fromSupport .bubble {
+  background-color: var(--color-surface-subtle);
+}

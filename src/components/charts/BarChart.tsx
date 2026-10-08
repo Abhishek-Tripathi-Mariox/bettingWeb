@@ -1,4 +1,4 @@
-import { formatCompact, niceMax, ticks } from './chartScale';
+import { domainFor, formatCompact } from './chartScale';
 import styles from './Chart.module.css';
 
 export type BarSeries = { name: string; color: string };
@@ -18,13 +18,14 @@ const BAR_GAP = 4;
 
 /** Grouped columns — deposits vs withdrawals in the wallet-flow panel. */
 export function BarChart({ data, series, height = 180, formatValue = formatCompact }: BarChartProps) {
-  const max = niceMax(Math.max(...data.flatMap((group) => group.values)));
+  const { min, max, ticks } = domainFor(data.flatMap((group) => group.values));
   const plotWidth = WIDTH - PAD.left - PAD.right;
   const plotHeight = height - PAD.top - PAD.bottom;
   const slot = plotWidth / data.length;
   const barWidth = (slot * 0.56 - BAR_GAP * (series.length - 1)) / series.length;
 
-  const y = (value: number) => PAD.top + plotHeight - (value / max) * plotHeight;
+  const y = (value: number) => PAD.top + plotHeight - ((value - min) / (max - min)) * plotHeight;
+  const baseline = y(0);
 
   return (
     <svg
@@ -35,9 +36,9 @@ export function BarChart({ data, series, height = 180, formatValue = formatCompa
       role="img"
       aria-label={series.map((item) => item.name).join(' vs ')}
     >
-      {ticks(max).map((tick) => (
+      {ticks.map((tick) => (
         <g key={tick}>
-          <line className={styles.grid} x1={PAD.left} x2={WIDTH - PAD.right} y1={y(tick)} y2={y(tick)} />
+          <line className={tick === 0 && min < 0 ? styles.zero : styles.grid} x1={PAD.left} x2={WIDTH - PAD.right} y1={y(tick)} y2={y(tick)} />
           <text className={`${styles.axis} ${styles.axisY}`} x={PAD.left - 8} y={y(tick) + 4}>
             {formatValue(tick)}
           </text>
@@ -54,9 +55,10 @@ export function BarChart({ data, series, height = 180, formatValue = formatCompa
               <rect
                 key={series[seriesIndex].name}
                 x={start + (barWidth + BAR_GAP) * seriesIndex}
-                y={y(value)}
+                // Negative values hang down from the zero line.
+                y={Math.min(y(value), baseline)}
                 width={barWidth}
-                height={Math.max(0, PAD.top + plotHeight - y(value))}
+                height={Math.abs(baseline - y(value))}
                 rx="3"
                 fill={series[seriesIndex].color}
               />

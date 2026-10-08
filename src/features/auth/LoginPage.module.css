@@ -21,7 +21,7 @@
   left: -120px;
   width: 479.994px;
   height: 479.994px;
-  background: radial-gradient(circle, rgba(33, 150, 243, 0.12) 0%, rgba(33, 150, 243, 0) 70%);
+  background: radial-gradient(circle, rgba(var(--color-primary-rgb), 0.12) 0%, rgba(var(--color-primary-rgb), 0) 70%);
 }
 
 .glowBottom {
@@ -102,4 +102,28 @@
   font-size: var(--font-size-2xs);
   line-height: var(--line-height-2xs);
   text-align: center;
+}
+
+/* Forgot-password flow (ForgotPasswordPage) and the post-reset notice on sign-in. */
+.hint {
+  margin-top: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-xs);
+}
+
+.notice {
+  border: 0.61px solid rgba(34, 197, 94, 0.4);
+  border-radius: var(--radius-md);
+  background-color: rgba(34, 197, 94, 0.08);
+  padding: 10px var(--space-4);
+  color: var(--color-success);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-xs);
+}
+
+.backRow {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-6);
 }

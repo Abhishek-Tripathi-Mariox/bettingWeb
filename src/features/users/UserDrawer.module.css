@@ -360,7 +360,7 @@
   justify-content: center;
   width: 27.999px;
   height: 27.999px;
-  border: 1.51px solid rgba(33, 150, 243, 0.3);
+  border: 1.51px solid rgba(var(--color-primary-rgb), 0.3);
   border-radius: var(--radius-pill);
   background-color: var(--color-primary-tint);
   color: var(--color-primary);
@@ -480,4 +480,67 @@
   color: var(--color-success);
   font-size: var(--font-size-2xs);
   line-height: var(--line-height-2xs);
+}
+
+.kycDocs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.kycDoc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  text-decoration: none;
+}
+
+.kycDocImage {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+
+.kycDocFile {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.kycDocLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kycReason {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+}
+
+/* "Void" on an open bet (Void Bet permission). */
+.voidBet {
+  border: var(--hairline) solid rgba(239, 68, 68, 0.4);
+  border-radius: var(--radius-sm);
+  background: none;
+  padding: 1px 8px;
+  color: var(--color-danger);
+  font-size: var(--font-size-2xs);
+  cursor: pointer;
 }

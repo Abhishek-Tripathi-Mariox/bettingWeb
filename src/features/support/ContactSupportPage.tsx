@@ -1,5 +1,4 @@
 import type { CSSProperties } from 'react';
-import { Button } from '../../components/ui/Button/Button';
 import { SectionCard } from '../../components/ui/SectionCard/SectionCard';
 import { cx } from '../../lib/cx';
 import {
@@ -7,6 +6,7 @@ import {
   SUPPORT_INTRO,
   SUPPORT_WINDOWS,
 } from './contactSupportData';
+import { MyTickets } from './MyTickets';
 import styles from './ContactSupportPage.module.css';
 
 /**
@@ -42,14 +42,21 @@ export function ContactSupportPage() {
               </div>
             </div>
             <p className={styles.channelNote}>{channel.note}</p>
-            {channel.action ? (
-              <Button className={styles.channelAction} size="xs" block>
+            {channel.action && channel.href ? (
+              <a
+                className={styles.channelLink}
+                href={channel.href}
+                target={channel.href.startsWith('http') ? '_blank' : undefined}
+                rel="noreferrer"
+              >
                 {channel.action}
-              </Button>
+              </a>
             ) : null}
           </article>
         ))}
       </div>
+
+      <MyTickets />
 
       <aside className={styles.notice}>
         <span className={styles.noticeEmoji} aria-hidden="true">

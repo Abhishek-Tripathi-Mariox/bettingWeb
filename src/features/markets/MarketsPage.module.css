@@ -63,7 +63,7 @@
 
 .scopeActive,
 .scopeActive:hover {
-  background-color: rgba(33, 150, 243, 0.2);
+  background-color: rgba(var(--color-primary-rgb), 0.2);
   color: var(--color-primary);
 }
 
@@ -166,7 +166,18 @@
 
 .rowActions {
   display: flex;
+  align-items: center;
   gap: var(--space-2);
+}
+
+.settleSelect {
+  height: 26px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-input);
+  color: var(--color-text);
+  font-size: 12px;
 }
 
 .edit {

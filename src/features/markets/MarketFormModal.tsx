@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { CheckCircleIcon } from '../../components/icons';
+import { CheckCircleIcon, CloseIcon, PlusIcon } from '../../components/icons';
 import { Button } from '../../components/ui/Button/Button';
 import { Modal } from '../../components/ui/Modal/Modal';
 import { SelectField } from '../../components/ui/TextField/SelectField';
@@ -25,6 +25,14 @@ function eventIdOf(market: ApiMarket): string {
   return typeof market.event === 'string' ? market.event : market.event._id;
 }
 
+/** "Arsenal vs Chelsea" -> its two sides, the usual selections of a new market. */
+function sidesOf(eventName = ''): [string, string] {
+  const [home, away] = eventName.split(/\s+vs\.?\s+/i);
+  return [home || 'Home', away || 'Away'];
+}
+
+type RunnerDraft = { name: string; odds: string };
+
 function eventLabel(event: ApiEvent): string {
   return `${event.name} · ${event.sport}`;
 }
@@ -45,11 +53,22 @@ export function MarketFormModal({ market, events, onClose, onCreate, onUpdate }:
     name: market?.name ?? '',
     type: market?.type ?? MARKET_TYPES[0],
     status: market?.status ?? 'Active',
-    backOdds: market ? String(market.backOdds) : '1.90',
-    layOdds: market ? String(market.layOdds) : '1.92',
     maxBet: market ? String(market.maxBet) : '100000',
     maxExposure: market ? String(market.maxExposure) : '500000',
   });
+  const eventName = (id: string) => events.find((event) => event._id === id)?.name;
+  /** What players can back. An older market without selections starts from its event's two sides. */
+  const [runners, setRunners] = useState<RunnerDraft[]>(() => {
+    if (market?.runners?.length) return market.runners.map((r) => ({ name: r.name, odds: String(r.odds) }));
+    const name = market && typeof market.event !== 'string' ? market.event.name : eventName(events[0]?._id ?? '');
+    const [home, away] = sidesOf(name);
+    return [
+      { name: home, odds: market ? String(market.backOdds || 1.9) : '1.90' },
+      { name: away, odds: market ? String(market.layOdds || 1.9) : '1.90' },
+    ];
+  });
+  const setRunner = (index: number, patch: Partial<RunnerDraft>) =>
+    setRunners((current) => current.map((runner, i) => (i === index ? { ...runner, ...patch } : runner)));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,12 +85,19 @@ export function MarketFormModal({ market, events, onClose, onCreate, onUpdate }:
       setError('Market code and name are required.');
       return;
     }
-    const backOdds = Number(form.backOdds);
-    const layOdds = Number(form.layOdds);
     const maxBet = Number(form.maxBet);
     const maxExposure = Number(form.maxExposure);
-    if ([backOdds, layOdds, maxBet, maxExposure].some((value) => Number.isNaN(value))) {
-      setError('Odds and limits must be numbers.');
+    if ([maxBet, maxExposure].some((value) => Number.isNaN(value))) {
+      setError('Limits must be numbers.');
+      return;
+    }
+    const selections = runners.map((runner) => ({ name: runner.name.trim(), odds: Number(runner.odds) }));
+    if (selections.some((runner) => !runner.name)) {
+      setError('Every selection needs a name.');
+      return;
+    }
+    if (selections.some((runner) => !Number.isFinite(runner.odds) || runner.odds < 1.01)) {
+      setError('Odds must be 1.01 or higher.');
       return;
     }
 
@@ -84,8 +110,7 @@ export function MarketFormModal({ market, events, onClose, onCreate, onUpdate }:
           name: form.name.trim(),
           type: form.type,
           status: form.status as ApiMarket['status'],
-          backOdds,
-          layOdds,
+          runners: selections,
           maxBet,
           maxExposure,
         });
@@ -95,8 +120,8 @@ export function MarketFormModal({ market, events, onClose, onCreate, onUpdate }:
           code: form.code.trim(),
           name: form.name.trim(),
           type: form.type,
-          backOdds,
-          layOdds,
+          status: form.status as ApiMarket['status'],
+          runners: selections,
           maxBet,
           maxExposure,
         });
@@ -120,7 +145,11 @@ export function MarketFormModal({ market, events, onClose, onCreate, onUpdate }:
               value={labelByEventId.get(form.event) ?? ''}
               onChange={(evt) => {
                 const id = eventIdByLabel.get(evt.target.value);
-                if (id) set('event')(id);
+                if (!id) return;
+                set('event')(id);
+                // A different event means different sides; typed odds are kept.
+                const sides = sidesOf(eventName(id));
+                setRunners((current) => current.map((runner, i) => (i < 2 ? { ...runner, name: sides[i] } : runner)));
               }}
             />
           ) : null}
@@ -154,22 +183,6 @@ export function MarketFormModal({ market, events, onClose, onCreate, onUpdate }:
             onChange={(evt) => set('status')(evt.target.value)}
           />
           <TextField
-            className={styles.back}
-            label="Back Odds"
-            labelCase="caps"
-            inputMode="decimal"
-            value={form.backOdds}
-            onChange={(evt) => set('backOdds')(evt.target.value)}
-          />
-          <TextField
-            className={styles.lay}
-            label="Lay Odds"
-            labelCase="caps"
-            inputMode="decimal"
-            value={form.layOdds}
-            onChange={(evt) => set('layOdds')(evt.target.value)}
-          />
-          <TextField
             label="Max Bet"
             labelCase="caps"
             inputMode="numeric"
@@ -184,6 +197,45 @@ export function MarketFormModal({ market, events, onClose, onCreate, onUpdate }:
             onChange={(evt) => set('maxExposure')(evt.target.value)}
           />
         </div>
+
+        <fieldset className={styles.selections}>
+          <legend className={styles.selectionsTitle}>Selections &amp; odds — what users can bet on</legend>
+          {runners.map((runner, index) => (
+            <div key={index} className={styles.selection}>
+              <input
+                className={styles.selectionName}
+                aria-label={`Selection ${index + 1} name`}
+                placeholder="e.g. Mumbai Indians"
+                value={runner.name}
+                onChange={(evt) => setRunner(index, { name: evt.target.value })}
+              />
+              <input
+                className={styles.selectionOdds}
+                aria-label={`Selection ${index + 1} odds`}
+                inputMode="decimal"
+                placeholder="1.90"
+                value={runner.odds}
+                onChange={(evt) => setRunner(index, { odds: evt.target.value })}
+              />
+              <button
+                type="button"
+                className={styles.selectionRemove}
+                aria-label={`Remove selection ${index + 1}`}
+                disabled={runners.length <= 2}
+                onClick={() => setRunners((current) => current.filter((_, i) => i !== index))}
+              >
+                <CloseIcon size={12} />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className={styles.selectionAdd}
+            onClick={() => setRunners((current) => [...current, { name: current.length === 2 ? 'Draw' : '', odds: '3.00' }])}
+          >
+            <PlusIcon size={12} /> Add selection
+          </button>
+        </fieldset>
 
         {error ? (
           <p role="alert" style={{ color: 'var(--color-danger)', margin: '0 0 8px', fontSize: 12 }}>
