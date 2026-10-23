@@ -11,7 +11,7 @@ import { ApiRequestError } from '../../lib/api';
 import { securityApi } from '../../lib/api/security';
 import type { AuditLogEntry, AuditLogPage, PlatformSession, SecurityStats } from '../../lib/api/security';
 import { cx } from '../../lib/cx';
-import { formatIp, formatRelativeTime } from '../../lib/format';
+import { formatIp, formatRelativeTime, platformTimeZone } from '../../lib/format';
 import { useAuth } from '../auth/authContext';
 import { ACTIVITY_TITLE, describeUserAgent } from '../users/usersData';
 import {
@@ -34,7 +34,7 @@ const errorMessage = (err: unknown) =>
   err instanceof ApiRequestError ? err.message : 'Unable to reach the server.';
 
 const formatWhen = (iso: string) =>
-  new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  new Date(iso).toLocaleString('en-IN', { timeZone: platformTimeZone(), day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 
 /** Security console: live sign-in logs, signed-in devices, the audit trail and the enforced policy. */
 export function SecurityPage() {
@@ -121,8 +121,11 @@ function AuditList({ actions, variant }: { actions?: string[]; variant: 'logs' |
       const link = document.createElement('a');
       link.href = url;
       link.download = `${variant === 'logs' ? 'login-logs' : 'audit-trail'}-${new Date().toISOString().slice(0, 10)}.csv`;
+      // Firefox / Safari only download from a link that is in the document, and need the URL alive a moment.
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       setError(errorMessage(err));
     } finally {

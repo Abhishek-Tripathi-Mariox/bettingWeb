@@ -17,12 +17,15 @@ export type MatchTab = 'Live' | 'Upcoming' | 'Settled' | 'Open Bets';
 
 export const MATCH_TABS: readonly MatchTab[] = ['Live', 'Upcoming', 'Settled', 'Open Bets'];
 
+/** Finished matches: the feed marks them Completed, a manual settle marks them Settled. */
+const isFinished = (match: ApiMatch) => match.status === 'Settled' || match.status === 'Completed';
+
 export function filterMatchesForTab(matches: ApiMatch[], tab: MatchTab): ApiMatch[] {
   if (tab === 'Live') return matches.filter((match) => match.status === 'Live');
   if (tab === 'Upcoming') return matches.filter((match) => match.status === 'Upcoming');
-  if (tab === 'Settled') return matches.filter((match) => match.status === 'Settled');
-  // Open Bets: every match that isn't fully settled yet (mirrors the original mock's definition).
-  return matches.filter((match) => match.status !== 'Settled');
+  if (tab === 'Settled') return matches.filter(isFinished);
+  // Open Bets: every match that isn't finished yet.
+  return matches.filter((match) => !isFinished(match));
 }
 
 export function matchMeta(match: ApiMatch): string {
@@ -51,12 +54,12 @@ export const PROVIDER_STATUS_TONE: Record<ApiProvider['status'], BadgeTone> = {
  */
 export function bettingStats(matches: ApiMatch[], providers: ApiProvider[]): StatCardProps[] {
   const liveCricket = matches.filter((match) => match.status === 'Live' && match.sport === 'Cricket').length;
-  const openMatches = matches.filter((match) => match.status !== 'Settled');
+  const openMatches = matches.filter((match) => !isFinished(match));
   const openBets = openMatches.reduce((sum, match) => sum + matchBetsCount(match), 0);
   const openStake = openMatches.reduce((sum, match) => sum + match.stake, 0);
   const totalBets = matches.reduce((sum, match) => sum + matchBetsCount(match), 0);
   const totalStake = matches.reduce((sum, match) => sum + match.stake, 0);
-  const settledToday = matches.filter((match) => match.status === 'Settled' && isToday(match.updatedAt));
+  const settledToday = matches.filter((match) => isFinished(match) && isToday(match.updatedAt));
   const connectedProviders = providers.filter((provider) => provider.status === 'Connected').length;
 
   return [

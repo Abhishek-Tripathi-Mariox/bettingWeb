@@ -1,5 +1,8 @@
+/** The deployed backend (Render), used when the build sets no VITE_API_URL. */
+const DEPLOYED_API_URL = 'https://betting-back-6l5y.onrender.com/api';
+
 /** Base URL of the auth/authorization backend — see backend/README.md. */
-const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:5000/api';
+const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) || DEPLOYED_API_URL;
 
 /** Thrown for any non-2xx response; `message` is the server's error message, ready to show the user. */
 export class ApiRequestError extends Error {

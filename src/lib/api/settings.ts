@@ -42,6 +42,13 @@ export const settingsApi = {
   updateApiKey: (id: string, updates: Partial<Pick<ApiKeyEntry, 'name' | 'status' | 'key'>>, accessToken: string) =>
     apiRequest<SettingsResponse>(`/settings/api-keys/${id}`, { method: 'PATCH', body: updates, accessToken }),
 
+  /** Sends a test through the saved SMTP / SMS gateway; rejects with the provider's error. */
+  testEmail: (to: string, accessToken: string) =>
+    apiRequest<{ message: string }>('/settings/smtp/test', { method: 'POST', body: { to }, accessToken }),
+
+  testSms: (to: string, accessToken: string) =>
+    apiRequest<{ message: string }>('/settings/sms/test', { method: 'POST', body: { to }, accessToken }),
+
   removeApiKey: (id: string, accessToken: string) =>
     apiRequest<SettingsResponse>(`/settings/api-keys/${id}`, { method: 'DELETE', accessToken }),
 };

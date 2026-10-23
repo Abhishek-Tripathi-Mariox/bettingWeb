@@ -2,12 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../auth/authContext';
 import { ApiRequestError } from '../../lib/api';
 import { networkApi } from '../../lib/api/network';
-import type { KycState, NetworkDetail, NetworkList, NetworkRole } from '../../lib/api/network';
+import type { NetworkDetail, NetworkList, NetworkRole } from '../../lib/api/network';
 
 export type NetworkListQuery = {
   role: NetworkRole;
   status?: 'active' | 'suspended';
-  kyc?: KycState;
   q?: string;
   page?: number;
   limit?: number;
@@ -17,7 +16,7 @@ export type NetworkListQuery = {
  * Loads one page of the caller's downline for a role. The search term is
  * debounced; `reload()` re-fetches after a create/edit/suspend.
  */
-export function useNetworkList({ role, status, kyc, q = '', page = 1, limit = 25 }: NetworkListQuery) {
+export function useNetworkList({ role, status, q = '', page = 1, limit = 25 }: NetworkListQuery) {
   const { accessToken } = useAuth();
   const [data, setData] = useState<NetworkList | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,7 +34,7 @@ export function useNetworkList({ role, status, kyc, q = '', page = 1, limit = 25
     let cancelled = false;
     setLoading(true);
     networkApi
-      .list({ role, status, kyc, q: search || undefined, page, limit }, accessToken)
+      .list({ role, status, q: search || undefined, page, limit }, accessToken)
       .then((res) => {
         if (cancelled) return;
         setData(res);
@@ -50,7 +49,7 @@ export function useNetworkList({ role, status, kyc, q = '', page = 1, limit = 25
     return () => {
       cancelled = true;
     };
-  }, [accessToken, role, status, kyc, search, page, limit, version]);
+  }, [accessToken, role, status, search, page, limit, version]);
 
   const reload = useCallback(() => setVersion((value) => value + 1), []);
 

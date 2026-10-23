@@ -1,7 +1,7 @@
 import { BuildingIcon, CheckCircleIcon, DollarIcon, PercentIcon } from '../../components/icons';
 import type { StatCardProps } from '../../components/ui/StatCard/StatCard';
 import type { NetworkListStats, NetworkRow } from '../../lib/api/network';
-import { formatCount, formatMoney, formatRupees } from '../../lib/format';
+import { formatCount, formatMoney, formatRupees, platformTimeZone } from '../../lib/format';
 import { statusLabel } from '../users/usersData';
 
 export type FranchiseStatus = 'Active' | 'Suspended';
@@ -109,5 +109,5 @@ export function formatLocation(row: { city?: string; state?: string }): string {
 
 export function formatJoined(iso: string): string {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('en-IN', { timeZone: platformTimeZone(), month: 'short', year: 'numeric' });
 }

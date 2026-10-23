@@ -36,12 +36,14 @@ export function LoginPage() {
 
   const role = getRole(roleId);
 
-  /** Picking a role swaps in that panel's demo credentials. */
+  /** Picking a role swaps in that panel's demo credentials (dev server only; otherwise keeps what was typed). */
   const selectRole = (nextRoleId: RoleId) => {
     const nextRole = getRole(nextRoleId);
     setRoleId(nextRoleId);
-    setUsername(nextRole.demo.username);
-    setPassword(nextRole.demo.password);
+    if (nextRole.demo.username) {
+      setUsername(nextRole.demo.username);
+      setPassword(nextRole.demo.password);
+    }
     setError(null);
     setNotice(null);
   };

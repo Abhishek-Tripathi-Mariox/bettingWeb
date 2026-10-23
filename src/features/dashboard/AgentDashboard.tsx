@@ -12,13 +12,13 @@ import { ApiRequestError } from '../../lib/api';
 import { networkApi } from '../../lib/api/network';
 import type { MyDashboard } from '../../lib/api/network';
 import { cx } from '../../lib/cx';
-import { formatRupees, formatRelativeTime } from '../../lib/format';
+import { formatRupees, formatRelativeTime, currencySymbol } from '../../lib/format';
 import { TXN_TONE, agentOverview, agentStats, commissionWeek } from './agentDashboardData';
 import styles from './AgentDashboard.module.css';
 
-/** Rupee axis: whole rupees while the figures are small ("₹75"), thousands after that ("₹8.0k"). */
+/** Money axis: whole units while the figures are small ("₹75"), thousands after that ("₹8.0k"). */
 const rupeesCompact = (value: number) =>
-  Math.abs(value) < 1000 ? `₹${Math.round(value)}` : `₹${(value / 1000).toFixed(1)}k`;
+  Math.abs(value) < 1000 ? `${currencySymbol()}${Math.round(value)}` : `${currencySymbol()}${(value / 1000).toFixed(1)}k`;
 
 const REFRESH_MS = 30_000;
 
@@ -229,7 +229,7 @@ export function AgentDashboard() {
       <div className={data.restricted?.includes('commission') ? undefined : styles.split}>
         {/* Commission and the ledger follow the Permissions page (held back by the server when not granted). */}
         {data.restricted?.includes('commission') ? null : (
-          <SectionCard title="My Commission (7 Days)" subtitle={`Estimated at ${data.commissionRate}% of daily stake`} size="md">
+          <SectionCard title="My Commission (7 Days)" subtitle="Paid at the end of each match" size="md">
             <BarChart data={commissionWeek(data)} series={COMMISSION_SERIES} formatValue={rupeesCompact} />
           </SectionCard>
         )}

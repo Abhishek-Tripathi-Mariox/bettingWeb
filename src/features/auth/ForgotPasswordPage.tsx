@@ -103,7 +103,7 @@ export function ForgotPasswordPage() {
           <SectionLabel>Reset Password</SectionLabel>
           <p className={styles.hint}>
             {step === 'request'
-              ? 'Enter your username and we will email a 6-digit code to the address on your account.'
+              ? 'Enter your username and we will send a 6-digit code to the email / mobile number on your account.'
               : `Enter the code sent for "${username.trim()}" and choose a new password.`}
           </p>
 

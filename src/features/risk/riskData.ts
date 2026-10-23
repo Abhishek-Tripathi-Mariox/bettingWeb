@@ -10,6 +10,7 @@ import type {
   ApiRiskStats,
   ApiRiskUserRef,
   ApiSuspiciousPattern,
+  RiskThresholds,
 } from '../../lib/api/risk';
 
 export type RiskLevel = 'Normal' | 'Warning' | 'Critical';
@@ -75,19 +76,19 @@ export const RISK_TONE_RGB: Record<RiskTone, string> = {
 
 /**
  * The backend stores no risk "level" on a market — it's derived here from
- * exposure/maxExposure utilization. Mirrors `risk.service.js#getStats`'
- * own `exposure >= maxExposure` cutoff for Critical.
+ * exposure / cap utilization against Settings → Exposure Limits' Warning and
+ * Auto-Suspend thresholds (sent with `GET /risk/exposure`).
  */
-const WARNING_UTILIZATION = 60;
+const DEFAULT_THRESHOLDS: RiskThresholds = { warningPercent: 60, criticalPercent: 100 };
 
 function utilizationOf(market: ApiRiskMarket): number {
   if (!market.maxExposure) return 0;
   return Math.min(100, Math.round((market.exposure / market.maxExposure) * 100));
 }
 
-function levelOf(utilization: number): RiskLevel {
-  if (utilization >= 100) return 'Critical';
-  if (utilization >= WARNING_UTILIZATION) return 'Warning';
+function levelOf(utilization: number, thresholds: RiskThresholds): RiskLevel {
+  if (utilization >= thresholds.criticalPercent) return 'Critical';
+  if (utilization >= thresholds.warningPercent) return 'Warning';
   return 'Normal';
 }
 
@@ -152,17 +153,17 @@ export function riskStats(stats: ApiRiskStats): StatCardProps[] {
     {
       label: 'Large Pending',
       value: formatCount(stats.largePendingRequests),
-      caption: 'Wallet requests ≥ ₹50K',
+      caption: `Wallet requests ≥ ${formatMoney(50000)}`,
       icon: TrendingUpIcon,
       accent: 'red',
     },
   ];
 }
 
-export function mapExposureRows(markets: ApiRiskMarket[]): ExposureRow[] {
+export function mapExposureRows(markets: ApiRiskMarket[], thresholds: RiskThresholds = DEFAULT_THRESHOLDS): ExposureRow[] {
   return markets.map((market) => {
     const utilization = utilizationOf(market);
-    const level = levelOf(utilization);
+    const level = levelOf(utilization, thresholds);
     return {
       id: market._id,
       eventId: eventOf(market)?._id ?? null,

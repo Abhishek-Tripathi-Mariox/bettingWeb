@@ -2,31 +2,65 @@
 
 const INDIAN = new Intl.NumberFormat('en-IN');
 
+/**
+ * Settings → General → Currency / Timezone, set by AppConfigProvider before
+ * the panel renders. Amounts are whole units of that currency.
+ */
+let symbol = '₹';
+let lakhCrore = true;
+let timeZone = 'Asia/Kolkata';
+
+export function setCurrency(currency: { code: string; symbol: string }) {
+  symbol = currency.symbol || '₹';
+  // Lakh / crore short forms only where people count that way.
+  lakhCrore = ['INR', 'NPR', 'PKR', 'LKR', 'BDT'].includes(currency.code);
+}
+
+export function setTimezone(tz: string) {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    timeZone = tz;
+  } catch {
+    timeZone = 'Asia/Kolkata';
+  }
+}
+
+/** The platform's currency symbol ("₹", "$", "AED "). */
+export const currencySymbol = () => symbol;
+
+/** A form label written with ₹ ("Amount (₹)"), shown in the platform's currency. */
+export const withCurrency = (label: string) => label.replace(/₹/g, symbol.trim());
+
 export function formatCount(value: number): string {
   return INDIAN.format(Math.round(value));
 }
 
-/** ₹ in Indian short scale — ₹1.42Cr, ₹18.4L, ₹42,600. */
+/** Short scale — ₹1.42Cr, ₹18.4L, ₹42,600 (or $1.2M, $184K for other currencies). */
 /** Figures a role isn't allowed to see arrive as null (see network.controller.js) and show as "—". */
 export function formatMoney(value: number | null | undefined): string {
   if (value == null) return '—';
   const abs = Math.abs(value);
-  if (abs >= 10_000_000) return `₹${trim(value / 10_000_000)}Cr`;
-  if (abs >= 100_000) return `₹${trim(value / 100_000)}L`;
-  return `₹${INDIAN.format(Math.round(value))}`;
+  if (lakhCrore) {
+    if (abs >= 10_000_000) return `${symbol}${trim(value / 10_000_000)}Cr`;
+    if (abs >= 100_000) return `${symbol}${trim(value / 100_000)}L`;
+  } else {
+    if (abs >= 1_000_000) return `${symbol}${trim(value / 1_000_000)}M`;
+    if (abs >= 100_000) return `${symbol}${trim(value / 1_000)}K`;
+  }
+  return `${symbol}${INDIAN.format(Math.round(value))}`;
 }
 
-/** ₹ with full digits — used in tables and ledgers. */
+/** Full digits with a sign — used in tables and ledgers. */
 export function formatMoneyExact(value: number | null | undefined): string {
   if (value == null) return '—';
   const sign = value > 0 ? '+' : value < 0 ? '-' : '';
-  return `${sign}₹${INDIAN.format(Math.abs(Math.round(value)))}`;
+  return `${sign}${symbol}${INDIAN.format(Math.abs(Math.round(value)))}`;
 }
 
-/** ₹ with full digits and no "+" — balances, limits, stakes. Negative values keep their "-". */
+/** Full digits and no "+" — balances, limits, stakes. Negative values keep their "-". */
 export function formatRupees(value: number | null | undefined): string {
   if (value == null) return '—';
-  return `${value < 0 ? '-' : ''}₹${INDIAN.format(Math.abs(Math.round(value)))}`;
+  return `${value < 0 ? '-' : ''}${symbol}${INDIAN.format(Math.abs(Math.round(value)))}`;
 }
 
 export function formatPercent(value: number, digits = 1): string {
@@ -51,32 +85,28 @@ export function formatRelativeTime(iso: string): string {
   if (diffHr < 24) return `${diffHr} hr ago`;
   const diffDay = Math.round(diffHr / 24);
   if (diffDay < 7) return `${diffDay}d ago`;
-  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone });
 }
 
 /** "Today 7:30 PM", "Tomorrow 8:00 PM", "12 Sep, 3:30 PM" — event/match start times. */
 export function formatStartTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
-  const now = new Date();
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const dayDiff = Math.round((startOfDay(date) - startOfDay(now)) / 86_400_000);
-  const time = date.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  const dayDiff = Math.round((Date.parse(dayKey(date)) - Date.parse(dayKey(new Date()))) / 86_400_000);
+  const time = date.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone });
   if (dayDiff === 0) return `Today ${time}`;
   if (dayDiff === 1) return `Tomorrow ${time}`;
-  return `${date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, ${time}`;
+  return `${date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone })}, ${time}`;
 }
 
-/** True when the ISO timestamp falls on today's local date — used for "X today" stat tiles. */
+/** "YYYY-MM-DD" of a date in the platform's timezone. */
+export const dayKey = (date: Date) => date.toLocaleDateString('en-CA', { timeZone });
+
+/** True when the ISO timestamp falls on the platform's today — used for "X today" stat tiles. */
 export function isToday(iso: string): boolean {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return false;
-  const now = new Date();
-  return (
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
-  );
+  return dayKey(date) === dayKey(new Date());
 }
 
 /** "::ffff:192.168.1.46" -> "192.168.1.46", "::1" -> "This computer" — the address as a person reads it. */
@@ -91,3 +121,12 @@ export function formatMobile(value: string | null | undefined): string {
   const digits = String(value ?? '').replace(/\D/g, '').slice(-10);
   return digits.length === 10 ? `+91 ${digits.slice(0, 5)} ${digits.slice(5)}` : String(value ?? '');
 }
+
+/** The platform's timezone (Settings → General) — pass as `timeZone` when showing a timestamp. */
+export const platformTimeZone = () => timeZone;
+
+/** Short name of the platform's timezone for labels ("IST", "GMT+4"). */
+export const timeZoneLabel = () =>
+  new Intl.DateTimeFormat('en-IN', { timeZone, timeZoneName: 'short' })
+    .formatToParts(new Date())
+    .find((part) => part.type === 'timeZoneName')?.value ?? timeZone;

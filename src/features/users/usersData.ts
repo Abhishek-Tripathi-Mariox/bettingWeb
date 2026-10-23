@@ -1,8 +1,8 @@
-import { BanIcon, CheckCircleIcon, ClockIcon, UsersIcon } from '../../components/icons';
+import { BanIcon, CheckCircleIcon, UsersIcon, WalletIcon } from '../../components/icons';
 import type { StatCardProps } from '../../components/ui/StatCard/StatCard';
 import type { RoleDefinition } from '../../config/roles';
-import type { KycState, NetworkAccount, NetworkListStats } from '../../lib/api/network';
-import { formatCount } from '../../lib/format';
+import type { NetworkAccount, NetworkListStats } from '../../lib/api/network';
+import { formatCount, formatRupees, platformTimeZone } from '../../lib/format';
 
 export type PersonStatus = 'Active' | 'Suspended';
 
@@ -25,7 +25,13 @@ export function peopleStats(stats: NetworkListStats | null, noun: string): StatC
     { label: `Total ${noun}`, value: value('total'), caption: 'In your network', icon: UsersIcon, accent: 'blue', tinted: true },
     { label: 'Active', value: value('active'), caption: 'Can log in', icon: CheckCircleIcon, accent: 'green' },
     { label: 'Suspended', value: value('suspended'), caption: 'Need review', icon: BanIcon, accent: 'red' },
-    { label: 'KYC Pending', value: value('kycPending'), caption: 'Awaiting verification', icon: ClockIcon, accent: 'yellow' },
+    {
+      label: 'Wallet Balance',
+      value: stats ? formatRupees(stats.balance) : '…',
+      caption: 'Held by these accounts',
+      icon: WalletIcon,
+      accent: 'yellow',
+    },
   ];
 }
 
@@ -34,7 +40,7 @@ export function formatDate(iso: string | null | undefined): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? '—'
-    : date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    : date.toLocaleDateString('en-IN', { timeZone: platformTimeZone(), day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 /** Browser + OS guess from a user-agent string, for the Devices tab. */
@@ -69,7 +75,7 @@ export function describeUserAgent(userAgent: string): { name: string; mobile: bo
 /** "₹5,000 · Reason: UTR did not match" — the extras a review entry carries, '' if none. */
 export const activityExtras = (metadata?: { amount?: number; reason?: string; documentType?: string }) =>
   [
-    metadata?.amount ? `₹${metadata.amount.toLocaleString('en-IN')}` : null,
+    metadata?.amount ? formatRupees(metadata.amount) : null,
     metadata?.documentType ?? null,
     metadata?.reason ? `Reason: ${metadata.reason}` : null,
   ]
@@ -92,20 +98,11 @@ export const ACTIVITY_TITLE: Record<string, string> = {
   account_activated: 'Account Activated',
   permission_updated: 'Permissions Updated',
   session_revoked: 'Session Revoked',
-  kyc_submitted: 'KYC Submitted',
-  kyc_verified: 'KYC Verified',
-  kyc_rejected: 'KYC Rejected',
   deposit_approved: 'Deposit Approved',
   deposit_rejected: 'Deposit Rejected',
   withdrawal_approved: 'Withdrawal Approved',
   withdrawal_rejected: 'Withdrawal Rejected',
 };
 
-export const KYC_TONE: Record<KycState, 'success' | 'warning' | 'danger' | 'neutral'> = {
-  'Not Submitted': 'neutral',
-  Verified: 'success',
-  Pending: 'warning',
-  Rejected: 'danger',
-};
 export const STATUS_TONE = { Active: 'success', Suspended: 'danger' } as const;
 export const RISK_TONE = { low: 'success', medium: 'warning', high: 'danger' } as const;

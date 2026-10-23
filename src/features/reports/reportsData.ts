@@ -13,6 +13,7 @@ import {
 import type { IconProps } from '../../components/icons';
 import type { StatCardProps } from '../../components/ui/StatCard/StatCard';
 import type { ReportKindSlug, ReportRow } from '../../lib/api/reports';
+import { formatRupees, platformTimeZone } from '../../lib/format';
 
 export type ReportFormat = 'PDF' | 'Excel' | 'Print';
 
@@ -29,7 +30,7 @@ export type ReportKind = {
 
 export type Field = { label: string; value: string };
 
-const money = (value: number) => `₹${Math.round(Math.abs(value)).toLocaleString('en-IN')}`;
+const money = (value: number) => formatRupees(Math.abs(value));
 
 /**
  * Header cards from the viewer's financial ledger (the same rows the
@@ -62,7 +63,7 @@ export function reportStats(rows: ReportRow[] | null): StatCardProps[] {
 export const REPORT_KINDS: ReportKind[] = [
   { title: 'Financial Report', description: 'Revenue, P&L, expenses and projections', icon: DollarIcon, rgb: '34, 197, 94', formats: ['PDF', 'Excel', 'Print'], slug: 'financial' },
   { title: 'Betting Report', description: 'All bets, outcomes, and settlements', icon: BettingIcon, rgb: '33, 150, 243', formats: ['PDF', 'Excel'], slug: 'betting' },
-  { title: 'User Report', description: 'User registrations, activity and KYC', icon: UsersIcon, rgb: '41, 182, 246', formats: ['PDF', 'Excel', 'Print'], slug: 'user' },
+  { title: 'User Report', description: 'User registrations and activity', icon: UsersIcon, rgb: '41, 182, 246', formats: ['PDF', 'Excel', 'Print'], slug: 'user' },
   { title: 'Wallet Report', description: 'Deposits, withdrawals and adjustments', icon: WalletIcon, rgb: '250, 204, 21', formats: ['PDF', 'Excel'], slug: 'wallet' },
   { title: 'Commission Report', description: 'Agent and franchise commissions', icon: CommissionIcon, rgb: '255, 46, 99', formats: ['PDF', 'Excel'], slug: 'commission' },
   { title: 'Exposure Report', description: 'Market and risk exposure analysis', icon: RiskIcon, rgb: '239, 68, 68', formats: ['PDF', 'Excel'], slug: 'exposure' },
@@ -100,7 +101,7 @@ export function formatReportCell(value: ReportRow[string]): string {
   if (typeof value === 'string' && ISO_DATETIME.test(value)) {
     const date = new Date(value);
     if (!Number.isNaN(date.getTime())) {
-      return date.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      return date.toLocaleString('en-IN', { timeZone: platformTimeZone(), day: 'numeric', month: 'short', year: 'numeric' });
     }
   }
   return String(value);

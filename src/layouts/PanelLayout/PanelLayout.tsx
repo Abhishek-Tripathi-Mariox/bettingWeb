@@ -4,10 +4,12 @@ import { getRole, navPath } from '../../config/roles';
 import type { NavItem, RoleDefinition } from '../../config/roles';
 import { useAuth } from '../../features/auth/authContext';
 import { cx } from '../../lib/cx';
+import { AnnouncementBar } from './AnnouncementBar';
 import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
 import { Topbar } from './Topbar';
 import styles from './PanelLayout.module.css';
+import { timeZoneLabel, platformTimeZone } from '../../lib/format';
 
 /** The nav entry matching the current URL — drives the title and breadcrumb. */
 function useCurrentNavItem(role: RoleDefinition): NavItem {
@@ -23,8 +25,8 @@ function useClock(): string {
     const id = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(id);
   }, []);
-  // Always India time — the status bar labels it IST whatever the browser's zone is.
-  return now.toLocaleTimeString('en-IN', { hour12: true, timeZone: 'Asia/Kolkata' });
+  // Platform time (Settings → General → Timezone) whatever the browser's zone is.
+  return `${timeZoneLabel()} ${now.toLocaleTimeString('en-IN', { hour12: true, timeZone: platformTimeZone() })}`;
 }
 
 /**
@@ -35,6 +37,12 @@ export function PanelLayout() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const [navOpen, setNavOpen] = useState(false);
+  // Desktop: the sidebar can be hidden to widen the page. Narrow screens use navOpen (a drawer) instead.
+  const [collapsed, setCollapsed] = useState(false);
+  const toggleNav = () => {
+    if (window.matchMedia('(max-width: 1080px)').matches) setNavOpen((open) => !open);
+    else setCollapsed((value) => !value);
+  };
   const role = getRole(user!.roleId);
   const current = useCurrentNavItem(role);
   const clock = useClock();
@@ -55,8 +63,9 @@ export function PanelLayout() {
         role={role}
         displayName={displayName}
         open={navOpen}
+        collapsed={collapsed}
         onNavigate={() => setNavOpen(false)}
-        onToggle={() => setNavOpen((open) => !open)}
+        onToggle={toggleNav}
         onSignOut={handleSignOut}
       />
 
@@ -66,8 +75,10 @@ export function PanelLayout() {
           section={current.label}
           username={user!.username}
           displayName={displayName}
-          onToggleNav={() => setNavOpen((open) => !open)}
+          navCollapsed={collapsed}
+          onToggleNav={toggleNav}
         />
+        <AnnouncementBar />
         <main className={styles.content}>
           <Outlet />
         </main>

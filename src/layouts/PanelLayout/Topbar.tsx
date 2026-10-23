@@ -6,6 +6,7 @@ import { Dot } from '../../components/ui/Dot/Dot';
 import { SearchInput } from '../../components/ui/SearchInput/SearchInput';
 import type { RoleDefinition } from '../../config/roles';
 import { useAuth } from '../../features/auth/authContext';
+import { usePermissions } from '../../features/auth/usePermissions';
 import { networkApi } from '../../lib/api/network';
 import { notificationsApi } from '../../lib/api/notifications';
 import { formatRupees } from '../../lib/format';
@@ -19,6 +20,8 @@ export type TopbarProps = {
   username: string;
   /** The signed-in account's name (its username until a name is set). */
   displayName: string;
+  /** The sidebar is hidden on desktop, so the menu button shows there too. */
+  navCollapsed: boolean;
   onToggleNav: () => void;
 };
 
@@ -30,16 +33,16 @@ const POLL_MS = 60_000;
 /**
  * What's waiting for the signed-in account. Super-admin has the platform
  * notification feed (its own page); the network roles get the work queued
- * in their own book — requests to approve, KYC to review.
+ * in their own book — requests to approve.
  */
 function useAlerts(role: RoleDefinition) {
   const { accessToken } = useAuth();
+  const { can, loaded } = usePermissions();
   const [alerts, setAlerts] = useState<Alert[]>([]);
 
   useEffect(() => {
-    if (!accessToken) return;
+    if (!accessToken || !loaded) return;
     let cancelled = false;
-    const has = (segment: string) => role.nav.some((item) => item.segment === segment);
     const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
     const load = async () => {
@@ -61,32 +64,26 @@ function useAlerts(role: RoleDefinition) {
           );
           return;
         }
-        const { stats, overview } = await networkApi.myDashboard(accessToken);
+        const { stats } = await networkApi.myDashboard(accessToken);
         if (cancelled) return;
-        // A role without a Wallet page (franchise) doesn't review requests itself: its agents do.
-        const reviews = has('wallet');
-        const wallet = reviews ? `${role.basePath}/wallet` : `${role.basePath}/agent`;
+        // Only a role that may approve requests reviews them itself; otherwise its agents do.
+        const reviews = can('finance', 'deposit', 'X') || can('finance', 'withdrawal', 'X');
+        const wallet = reviews ? `${role.basePath}/wallet` : `${role.basePath}/${role.manages ? 'agent' : 'users'}`;
         const waiting = (amount: number) =>
           reviews ? `${formatRupees(amount)} waiting for approval` : `${formatRupees(amount)} waiting with your agents`;
         setAlerts(
           [
-            stats.pendingDeposits.count > 0 && {
+            (stats.pendingDeposits?.count ?? 0) > 0 && {
               id: 'deposits',
-              title: `${plural(stats.pendingDeposits.count, 'deposit')} ${reviews ? 'to review' : 'pending'}`,
-              detail: waiting(stats.pendingDeposits.amount),
+              title: `${plural(stats.pendingDeposits!.count, 'deposit')} ${reviews ? 'to review' : 'pending'}`,
+              detail: waiting(stats.pendingDeposits!.amount),
               to: reviews ? `${wallet}?tab=Deposits` : wallet,
             },
-            stats.pendingWithdrawals.count > 0 && {
+            (stats.pendingWithdrawals?.count ?? 0) > 0 && {
               id: 'withdrawals',
-              title: `${plural(stats.pendingWithdrawals.count, 'withdrawal')} ${reviews ? 'to review' : 'pending'}`,
-              detail: waiting(stats.pendingWithdrawals.amount),
+              title: `${plural(stats.pendingWithdrawals!.count, 'withdrawal')} ${reviews ? 'to review' : 'pending'}`,
+              detail: waiting(stats.pendingWithdrawals!.amount),
               to: reviews ? `${wallet}?tab=Withdrawals` : wallet,
-            },
-            overview.kycPending > 0 && {
-              id: 'kyc',
-              title: `${plural(overview.kycPending, 'KYC submission')} pending`,
-              detail: 'Documents waiting for verification',
-              to: `${role.basePath}/users?filter=kyc`,
             },
           ].filter(Boolean) as Alert[],
         );
@@ -101,12 +98,12 @@ function useAlerts(role: RoleDefinition) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [accessToken, role]);
+  }, [accessToken, role, can, loaded]);
 
   return alerts;
 }
 
-export function Topbar({ role, section, username, displayName, onToggleNav }: TopbarProps) {
+export function Topbar({ role, section, username, displayName, navCollapsed, onToggleNav }: TopbarProps) {
   const navigate = useNavigate();
   const live = usePlatformStatus()?.liveMatches ?? 0;
   const alerts = useAlerts(role);
@@ -146,7 +143,7 @@ export function Topbar({ role, section, username, displayName, onToggleNav }: To
     <header className={styles.topbar}>
       <button
         type="button"
-        className={`${styles.iconButton} ${styles.menuButton}`}
+        className={`${styles.iconButton} ${styles.menuButton} ${navCollapsed ? styles.menuButtonShown : ''}`}
         aria-label="Open navigation"
         onClick={onToggleNav}
       >

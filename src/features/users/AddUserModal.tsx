@@ -7,8 +7,9 @@ import { SelectField } from '../../components/ui/TextField/SelectField';
 import { TextField } from '../../components/ui/TextField/TextField';
 import { useAuth } from '../auth/authContext';
 import { accountLabel, networkApi } from '../../lib/api/network';
-import type { AccountRef, KycState, NetworkAccount } from '../../lib/api/network';
+import type { AccountRef, NetworkAccount } from '../../lib/api/network';
 import styles from './AddUserModal.module.css';
+import { commissionCap, commissionLabel, parseCommission } from './commissionRates';
 
 /** Same rule as the backend: an Indian mobile, with or without +91 / spaces. */
 const isMobile = (value: string) => {
@@ -18,7 +19,6 @@ const isMobile = (value: string) => {
   return /^[6-9]\d{9}$/.test(local);
 };
 
-const KYC_OPTIONS: KycState[] = ['Not Submitted', 'Pending', 'Verified', 'Rejected'];
 const NO_AGENT = '— Unassigned —';
 
 export type AddUserModalProps = {
@@ -30,14 +30,12 @@ export type AddUserModalProps = {
   agents: AccountRef[];
   /** Super-admin may leave a user unassigned; everyone else must pick an agent. */
   agentOptional: boolean;
-  /** Only roles that review KYC may set it by hand; others' new users start "Not Submitted". */
-  canSetKyc: boolean;
   onClose: () => void;
   onSaved: () => void;
 };
 
 /** The create dialog from node 79:4484 — also used to edit an existing user. */
-export function AddUserModal({ title, account, agents, agentOptional, canSetKyc, onClose, onSaved }: AddUserModalProps) {
+export function AddUserModal({ title, account, agents, agentOptional, onClose, onSaved }: AddUserModalProps) {
   const { accessToken } = useAuth();
   const isEdit = account !== null;
   const agentLabels = agents.map(accountLabel);
@@ -52,13 +50,17 @@ export function AddUserModal({ title, account, agents, agentOptional, canSetKyc,
     city: account?.city ?? '',
     state: account?.state ?? '',
     agent: agents.length === 1 && !agentOptional ? agentLabels[0] : '',
-    kyc: (account?.kyc ?? 'Not Submitted') as string,
+    matchCommission: account?.matchCommission ? String(account.matchCommission) : '',
+    sessionCommission: account?.sessionCommission ? String(account.sessionCommission) : '',
   });
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const set = (key: keyof typeof form) => (value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
+
+  /** The player's agent — its own rates are the most the player can be given. */
+  const cap = commissionCap(isEdit ? account.parent : agents[agentLabels.indexOf(form.agent)]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -71,7 +73,6 @@ export function AddUserModal({ title, account, agents, agentOptional, canSetKyc,
       dob: form.dob || undefined,
       city: form.city.trim(),
       state: form.state.trim(),
-      ...(canSetKyc ? { kyc: form.kyc as KycState } : {}),
     };
 
     if (!profile.name) return setError('Full name is required.');
@@ -81,8 +82,12 @@ export function AddUserModal({ title, account, agents, agentOptional, canSetKyc,
     setPending(true);
     setError(null);
     try {
+      const rates = {
+        matchCommission: parseCommission('Match', form.matchCommission, cap),
+        sessionCommission: parseCommission('Session', form.sessionCommission, cap),
+      };
       if (isEdit) {
-        await networkApi.update(account._id, profile, accessToken);
+        await networkApi.update(account._id, { ...profile, ...rates }, accessToken);
       } else {
         const username = form.username.trim().toLowerCase();
         if (!/^[a-z0-9_]{4,32}$/.test(username)) {
@@ -92,7 +97,7 @@ export function AddUserModal({ title, account, agents, agentOptional, canSetKyc,
         const parent = agents[agentLabels.indexOf(form.agent)];
         if (!parent && !agentOptional) throw new Error('Choose an agent for this user.');
         await networkApi.create(
-          { role: 'player', username, password: form.password, parentId: parent?._id, ...profile },
+          { role: 'player', username, password: form.password, parentId: parent?._id, ...profile, ...rates },
           accessToken,
         );
       }
@@ -192,15 +197,22 @@ export function AddUserModal({ title, account, agents, agentOptional, canSetKyc,
               onChange={(event) => set('agent')(event.target.value)}
             />
           )}
-          {canSetKyc ? (
-            <SelectField
-              label="KYC Status"
-              options={KYC_OPTIONS}
-              placeholder={null}
-              value={form.kyc}
-              onChange={(event) => set('kyc')(event.target.value)}
-            />
-          ) : null}
+          <TextField
+            label={commissionLabel('Match', cap)}
+            labelCase="caps"
+            inputMode="decimal"
+            placeholder="0"
+            value={form.matchCommission}
+            onChange={(event) => set('matchCommission')(event.target.value)}
+          />
+          <TextField
+            label={commissionLabel('Session', cap)}
+            labelCase="caps"
+            inputMode="decimal"
+            placeholder="0"
+            value={form.sessionCommission}
+            onChange={(event) => set('sessionCommission')(event.target.value)}
+          />
         </div>
 
         {error ? <p role="alert">{error}</p> : null}

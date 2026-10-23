@@ -160,6 +160,12 @@
   background-color: rgba(239, 68, 68, 0.08);
 }
 
+@media (min-width: 1081px) {
+  .sidebarCollapsed {
+    display: none;
+  }
+}
+
 @media (max-width: 1080px) {
   .sidebar {
     position: fixed;

@@ -40,7 +40,7 @@ type Restricted = 'wallet' | 'bets' | 'commission';
 
 /** Agent dashboard — node 139:114739, every figure scoped to the agent's own players. */
 export function agentStats(data: MyDashboard): StatCardProps[] {
-  const { stats, commissionRate } = data;
+  const { stats, commissionRates } = data;
   // Cards for what the role may not see (Permissions page) are left out; their figures arrive as null.
   const hidden = new Set(data.restricted ?? []);
   const cards: [Restricted | null, () => StatCardProps][] = [
@@ -77,7 +77,7 @@ export function agentStats(data: MyDashboard): StatCardProps[] {
     ['commission', () => ({
       label: "Today's Commission",
       value: formatRupees(stats.todayCommission),
-      caption: `${commissionRate}% of turnover`,
+      caption: `Match ${commissionRates.match}% · Session ${commissionRates.session}%`,
       ...delta(stats.todayCommission, stats.yesterdayCommission, formatRupees),
       icon: CommissionIcon,
       accent: 'green',
@@ -92,15 +92,15 @@ export function agentStats(data: MyDashboard): StatCardProps[] {
     })],
     ['wallet', () => ({
       label: 'Pending Deposits',
-      value: formatCount(stats.pendingDeposits.count),
-      caption: `${formatRupees(stats.pendingDeposits.amount)} total`,
+      value: formatCount(stats.pendingDeposits!.count),
+      caption: `${formatRupees(stats.pendingDeposits!.amount)} total`,
       icon: ArrowDownIcon,
       accent: 'yellow',
     })],
     ['wallet', () => ({
       label: 'Pending Withdrawals',
-      value: formatCount(stats.pendingWithdrawals.count),
-      caption: `${formatRupees(stats.pendingWithdrawals.amount)} total`,
+      value: formatCount(stats.pendingWithdrawals!.count),
+      caption: `${formatRupees(stats.pendingWithdrawals!.amount)} total`,
       icon: ArrowUpIcon,
       accent: 'red',
     })],
@@ -120,8 +120,6 @@ export function agentOverview(data: MyDashboard): OverviewTile[] {
   return [
     { label: 'Total Users', value: formatCount(o.totalUsers), share: o.totalUsers > 0 ? '100%' : '0%', color: 'var(--color-primary)' },
     { label: 'Active Today', value: formatCount(o.activeToday), share: share(o.activeToday, o.totalUsers), color: 'var(--color-success)' },
-    { label: 'KYC Verified', value: formatCount(o.kycVerified), share: share(o.kycVerified, o.totalUsers), color: 'var(--color-primary-light)' },
-    { label: 'KYC Pending', value: formatCount(o.kycPending), share: share(o.kycPending, o.totalUsers), color: 'var(--color-warning)' },
     { label: 'Suspended', value: formatCount(o.suspended), share: share(o.suspended, o.totalUsers), color: 'var(--color-danger)' },
     { label: 'New This Month', value: formatCount(o.newThisMonth), share: growth, color: '#8b5cf6' },
   ];

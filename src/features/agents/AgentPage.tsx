@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { BanIcon, CheckCircleIcon, EyeIcon, PencilIcon, PlusIcon } from '../../components/icons';
 import { Badge } from '../../components/ui/Badge/Badge';
 import { Button } from '../../components/ui/Button/Button';
-import { Checkbox } from '../../components/ui/Checkbox/Checkbox';
 import { DataTable } from '../../components/ui/DataTable/DataTable';
 import type { Column } from '../../components/ui/DataTable/DataTable';
 import { IconButton } from '../../components/ui/IconButton/IconButton';
@@ -29,7 +28,6 @@ export function AgentPage() {
   const [filter, setFilter] = useState<Filter>('All');
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<string[]>([]);
   /** null = closed, 'new' = Create, an account = Edit. */
   const [form, setForm] = useState<NetworkAccount | 'new' | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -48,31 +46,7 @@ export function AgentPage() {
   const abilities = data?.abilities ?? { create: false, edit: false, suspend: false };
   const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
 
-  const toggleOne = (id: string) =>
-    setSelected((ids) => (ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id]));
-  const allSelected = rows.length > 0 && rows.every((row) => selected.includes(row._id));
-
   const columns: Column<NetworkRow>[] = [
-    {
-      key: 'select',
-      width: 44,
-      header: (
-        <Checkbox
-          label=""
-          aria-label="Select all agents"
-          checked={allSelected}
-          onChange={(event) => setSelected(event.target.checked ? rows.map((row) => row._id) : [])}
-        />
-      ),
-      render: (row) => (
-        <Checkbox
-          label=""
-          aria-label={`Select ${row.name || row.username}`}
-          checked={selected.includes(row._id)}
-          onChange={() => toggleOne(row._id)}
-        />
-      ),
-    },
     { key: 'code', header: 'Agent ID', render: (row) => <span className={styles.id}>{row.username}</span> },
     { key: 'name', header: 'Name', render: (row) => <span className={styles.name}>{row.name || row.username}</span> },
     { key: 'users', header: 'Users', render: (row) => <span className={styles.name}>{row.summary.players}</span> },

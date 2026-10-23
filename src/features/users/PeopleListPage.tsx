@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import { BanIcon, CheckCircleIcon, EyeIcon, PencilIcon, PlusIcon } from '../../components/icons';
 import { Badge } from '../../components/ui/Badge/Badge';
 import { Button } from '../../components/ui/Button/Button';
-import { Checkbox } from '../../components/ui/Checkbox/Checkbox';
 import { DataTable } from '../../components/ui/DataTable/DataTable';
 import type { Column } from '../../components/ui/DataTable/DataTable';
 import { IconButton } from '../../components/ui/IconButton/IconButton';
@@ -18,7 +17,6 @@ import { formatRupees, formatRelativeTime } from '../../lib/format';
 import { AddUserModal } from './AddUserModal';
 import { UserDrawer } from './UserDrawer';
 import {
-  KYC_TONE,
   RISK_TONE,
   STATUS_TONE,
   peopleStats,
@@ -29,8 +27,7 @@ import {
 import { useNetworkList, useStatusToggle } from './useNetworkList';
 import styles from './PeopleListPage.module.css';
 
-/** 'KYC Pending' lists players whose submitted documents are waiting for review. */
-const FILTERS = ['All', 'Active', 'Suspended', 'KYC Pending'] as const;
+const FILTERS = ['All', 'Active', 'Suspended'] as const;
 type Filter = (typeof FILTERS)[number];
 
 const PAGE_SIZE = 10;
@@ -45,21 +42,19 @@ export function PeopleListPage({ role, title }: { role: RoleDefinition; title: s
   const noun = title.toLowerCase();
   const singular = title.replace(/s$/, '');
 
-  // The topbar's search and the bell's links open this page with `?q=` / `?filter=kyc`.
+  // The topbar's search opens this page with `?q=`.
   const [params] = useSearchParams();
   const linkedQuery = params.get('q') ?? '';
-  const linkedFilter: Filter = params.get('filter') === 'kyc' ? 'KYC Pending' : 'All';
-  const [filter, setFilter] = useState<Filter>(linkedFilter);
+  const [filter, setFilter] = useState<Filter>('All');
   const [query, setQuery] = useState(linkedQuery);
   const [page, setPage] = useState(1);
 
   // A new link while the page is already open (searching again from the topbar).
   useEffect(() => {
     setQuery(linkedQuery);
-    setFilter(linkedFilter);
+    setFilter('All');
     setPage(1);
-  }, [linkedQuery, linkedFilter]);
-  const [selected, setSelected] = useState<string[]>([]);
+  }, [linkedQuery]);
   const [openId, setOpenId] = useState<string | null>(null);
   /** null = closed, 'new' = Add, an account = Edit. */
   const [form, setForm] = useState<NetworkAccount | 'new' | null>(null);
@@ -68,7 +63,6 @@ export function PeopleListPage({ role, title }: { role: RoleDefinition; title: s
   const { data, loading, error, reload } = useNetworkList({
     role: 'player',
     status: filter === 'Active' ? 'active' : filter === 'Suspended' ? 'suspended' : undefined,
-    kyc: filter === 'KYC Pending' ? 'Pending' : undefined,
     q: query,
     page,
     limit: PAGE_SIZE,
@@ -79,31 +73,7 @@ export function PeopleListPage({ role, title }: { role: RoleDefinition; title: s
   const abilities = data?.abilities ?? { create: false, edit: false, suspend: false };
   const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE_SIZE));
 
-  const toggleOne = (id: string) =>
-    setSelected((ids) => (ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id]));
-  const allVisibleSelected = rows.length > 0 && rows.every((row) => selected.includes(row._id));
-
   const columns: Column<NetworkRow>[] = [
-    {
-      key: 'select',
-      width: 44,
-      header: (
-        <Checkbox
-          label=""
-          aria-label={`Select all ${noun} on this page`}
-          checked={allVisibleSelected}
-          onChange={(event) => setSelected(event.target.checked ? rows.map((row) => row._id) : [])}
-        />
-      ),
-      render: (row) => (
-        <Checkbox
-          label=""
-          aria-label={`Select ${row.name || row.username}`}
-          checked={selected.includes(row._id)}
-          onChange={() => toggleOne(row._id)}
-        />
-      ),
-    },
     { key: 'id', header: 'User ID', render: (row) => <span className={styles.id}>{row.username}</span> },
     {
       key: 'name',
@@ -142,7 +112,6 @@ export function PeopleListPage({ role, title }: { role: RoleDefinition; title: s
           },
         ]
       : []),
-    { key: 'kyc', header: 'KYC', render: (row) => <Badge tone={KYC_TONE[row.kyc]}>{row.kyc}</Badge> },
     {
       key: 'status',
       header: 'Status',
@@ -259,7 +228,6 @@ export function PeopleListPage({ role, title }: { role: RoleDefinition; title: s
           account={form === 'new' ? null : form}
           agents={data?.parentOptions ?? []}
           agentOptional={role.id === 'super-admin'}
-          canSetKyc={abilities.edit}
           onClose={() => setForm(null)}
           onSaved={() => {
             setForm(null);

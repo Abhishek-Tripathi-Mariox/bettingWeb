@@ -17,7 +17,7 @@ import { resizeImageToDataUri } from '../../lib/image';
 import { cx } from '../../lib/cx';
 import { networkApi } from '../../lib/api/network';
 import type { DetailActivity, MyProfile } from '../../lib/api/network';
-import { formatIp, formatMoney, formatRelativeTime, formatRupees } from '../../lib/format';
+import { formatIp, formatMoney, formatRelativeTime, formatRupees, platformTimeZone } from '../../lib/format';
 import { ACTIVITY_TITLE, describeUserAgent, formatDate, activityExtras } from '../users/usersData';
 import {
   MOVEMENT_ICON,
@@ -534,7 +534,7 @@ function LoginHistoryTab({ logins }: { logins: DetailActivity[] | null }) {
     {
       key: 'when',
       header: 'Date & Time',
-      render: (row) => <span className={styles.strong}>{new Date(row.createdAt).toLocaleString('en-IN')}</span>,
+      render: (row) => <span className={styles.strong}>{new Date(row.createdAt).toLocaleString('en-IN', { timeZone: platformTimeZone() })}</span>,
     },
     { key: 'ip', header: 'IP Address', render: (row) => <span className={styles.mono}>{formatIp(row.ip) || '—'}</span> },
     {

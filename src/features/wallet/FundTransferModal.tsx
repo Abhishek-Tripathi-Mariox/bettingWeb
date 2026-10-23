@@ -8,7 +8,7 @@ import { TextField } from '../../components/ui/TextField/TextField';
 import { ApiRequestError } from '../../lib/api';
 import { networkApi } from '../../lib/api/network';
 import { walletApi } from '../../lib/api/wallet';
-import { formatRupees } from '../../lib/format';
+import { formatRupees, withCurrency } from '../../lib/format';
 import { useAuth } from '../auth/authContext';
 import styles from './ReviewRequestModal.module.css';
 
@@ -87,7 +87,7 @@ export function FundTransferModal({ balance, onClose, onDone }: Props) {
           onChange={(event) => setForm((current) => ({ ...current, to: event.target.value }))}
         />
         <TextField
-          label="Amount (₹)"
+          label={withCurrency('Amount (₹)')}
           inputMode="numeric"
           placeholder="0"
           value={form.amount}

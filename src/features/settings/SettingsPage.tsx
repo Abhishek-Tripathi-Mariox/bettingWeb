@@ -56,9 +56,9 @@ function MyAccountSettings() {
   const fields = [
     { label: 'Username', value: me.username },
     ...(me.referralCode ? [{ label: 'Referral Code', value: me.referralCode }] : []),
-    { label: 'Commission Rate', value: inForce(limits.commissionRate, (n) => `${n}% of turnover`) },
-    { label: 'Commission Type', value: me.commissionType ?? 'Flat' },
-    { label: 'Settlement Cycle', value: me.settlementCycle ?? 'Weekly' },
+    { label: 'Match Commission', value: `${limits.matchCommission}% of players' net match loss` },
+    { label: 'Session Commission', value: `${limits.sessionCommission}% of session stake` },
+    { label: 'Commission Paid', value: 'At the end of every match' },
     { label: 'Credit Limit', value: money(limits.creditLimit, 'Not set') },
     {
       label: 'Stake per Bet (each user)',

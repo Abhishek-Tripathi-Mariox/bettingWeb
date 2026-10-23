@@ -194,7 +194,7 @@
   text-align: center;
 }
 
-/* Shared list scaffolding for the ledger, KYC and device tabs */
+/* Shared list scaffolding for the ledger and device tabs */
 .list {
   display: flex;
   flex-direction: column;
@@ -264,77 +264,6 @@
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
   line-height: var(--line-height-lg);
-}
-
-/* KYC tab */
-.kycStack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-}
-
-.kycBanner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  border: var(--hairline) solid var(--banner-border);
-  border-radius: var(--radius-tile);
-  background-color: var(--banner-bg);
-  padding: 14.755px 18.755px;
-  color: var(--banner-color);
-}
-
-.kycBannerTitle {
-  color: var(--color-text);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
-  line-height: var(--line-height-md);
-}
-
-.kycBannerMeta {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-xs);
-}
-
-.kycValue {
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  line-height: var(--line-height-xs);
-}
-
-.kycActions {
-  display: flex;
-  gap: var(--space-3);
-}
-
-.kycActions > * {
-  flex: 1;
-  justify-content: center;
-  padding: 8.755px 16.755px;
-}
-
-.approve {
-  border-color: rgba(34, 197, 94, 0.3);
-  background-color: rgba(34, 197, 94, 0.15);
-  color: var(--color-success);
-}
-
-.approve:hover {
-  background-color: rgba(34, 197, 94, 0.22);
-  color: var(--color-success);
-}
-
-.reject {
-  border-color: rgba(239, 68, 68, 0.3);
-  background-color: rgba(239, 68, 68, 0.15);
-  color: var(--color-danger);
-}
-
-.reject:hover {
-  background-color: rgba(239, 68, 68, 0.22);
-  color: var(--color-danger);
 }
 
 /* Activity timeline */
@@ -480,58 +409,6 @@
   color: var(--color-success);
   font-size: var(--font-size-2xs);
   line-height: var(--line-height-2xs);
-}
-
-.kycDocs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.kycDoc {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  text-decoration: none;
-}
-
-.kycDocImage {
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  object-fit: cover;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-raised);
-}
-
-.kycDocFile {
-  display: grid;
-  place-items: center;
-  aspect-ratio: 16 / 10;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-  font-weight: 600;
-}
-
-.kycDocLabel {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.kycReason {
-  width: 100%;
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text);
-  font: inherit;
 }
 
 /* "Void" on an open bet (Void Bet permission). */

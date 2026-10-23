@@ -79,7 +79,7 @@ export function RiskPage() {
       .then(([statsRes, exposureRes, panelsRes]) => {
         if (cancelled) return;
         setStats(statsRes.stats);
-        setRows(mapExposureRows(exposureRes.markets));
+        setRows(mapExposureRows(exposureRes.markets, exposureRes.thresholds));
         setPanels(panelsRes);
       })
       .catch((err) => {

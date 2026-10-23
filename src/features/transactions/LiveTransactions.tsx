@@ -16,7 +16,7 @@ import { transactionsApi } from '../../lib/api/transactions';
 import type { ApiTransaction, TransactionStatus, TransactionTab, TransactionType } from '../../lib/api/transactions';
 import { walletApi } from '../../lib/api/wallet';
 import type { WalletStats } from '../../lib/api/wallet';
-import { formatCount, formatMoney, formatRupees } from '../../lib/format';
+import { formatCount, formatMoney, formatRupees, platformTimeZone } from '../../lib/format';
 import styles from './TransactionsPage.module.css';
 
 const PAGE_SIZE = 20;
@@ -39,6 +39,7 @@ const TYPE_RGB: Record<TransactionType, string> = {
   Adjustment: '41, 182, 246',
   Commission: '34, 197, 94',
   Payment: '250, 204, 21',
+  'Referral Bonus': '34, 197, 94',
 };
 
 const STATUS_TONE: Record<TransactionStatus, BadgeTone> = {
@@ -51,9 +52,9 @@ const userLabel = (user: ApiTransaction['user']) =>
   !user ? 'Platform' : typeof user === 'string' ? user.slice(-6).toUpperCase() : user.name || user.username;
 
 const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' });
+  new Date(iso).toLocaleDateString('en-IN', { timeZone: platformTimeZone(), day: '2-digit', month: 'short', year: '2-digit' });
 const formatTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  new Date(iso).toLocaleTimeString('en-IN', { timeZone: platformTimeZone(), hour: '2-digit', minute: '2-digit' });
 
 const COLUMNS: Column<ApiTransaction>[] = [
   { key: 'id', header: 'TXN ID', render: (row) => <span className={styles.id}>{row._id.slice(-8).toUpperCase()}</span> },

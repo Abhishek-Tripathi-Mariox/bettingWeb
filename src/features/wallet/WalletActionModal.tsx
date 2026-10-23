@@ -15,6 +15,7 @@ import { TextAreaField } from '../../components/ui/TextField/TextAreaField';
 import { TextField } from '../../components/ui/TextField/TextField';
 import styles from './WalletActionModal.module.css';
 import type { ComponentType } from 'react';
+import { withCurrency } from '../../lib/format';
 
 export type WalletAction = 'Manual Credit' | 'Manual Debit' | 'Transfer' | 'Adjustment';
 
@@ -117,7 +118,7 @@ export function WalletActionModal({ action, onClose, onConfirm, users, onSubmit 
           <TextField
             className={styles.amount}
             style={{ borderColor: `rgba(${spec.rgb}, 0.25)` }}
-            label="Amount (₹) *"
+            label={withCurrency('Amount (₹) *')}
             labelCase="caps"
             inputMode="numeric"
             placeholder="Enter amount"

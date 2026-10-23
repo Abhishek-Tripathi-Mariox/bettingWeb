@@ -7,6 +7,7 @@ import { SelectField } from '../../components/ui/TextField/SelectField';
 import { TextField } from '../../components/ui/TextField/TextField';
 import { PAYMENT_METHODS, PAYMENT_TYPES, RECIPIENT_TYPES } from './walletData';
 import styles from './NewPaymentModal.module.css';
+import { withCurrency } from '../../lib/format';
 
 export type PaymentRecipientOption = { id: string; label: string; type: (typeof RECIPIENT_TYPES)[number] };
 
@@ -98,7 +99,7 @@ export function NewPaymentModal({ onClose, onConfirm, recipients, onSubmit }: Ne
           />
           <TextField
             fieldClassName={styles.wide}
-            label="Amount (₹) *"
+            label={withCurrency('Amount (₹) *')}
             labelCase="caps"
             inputMode="numeric"
             placeholder="Enter amount"

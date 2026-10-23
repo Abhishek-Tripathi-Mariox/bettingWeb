@@ -8,25 +8,18 @@ import { TextField } from '../../components/ui/TextField/TextField';
 import { useAuth } from '../auth/authContext';
 import { usePermissions } from '../auth/usePermissions';
 import { accountLabel, networkApi } from '../../lib/api/network';
-import type { AccountDraft, AccountRef, CommissionType, NetworkAccount } from '../../lib/api/network';
+import type { AccountDraft, AccountRef, NetworkAccount } from '../../lib/api/network';
 import styles from './CreateSuperAgentModal.module.css';
+import { withCurrency } from '../../lib/format';
+import { commissionCap, commissionLabel, parseCommission } from '../users/commissionRates';
 
 type StaffRole = 'franchise' | 'super-agent' | 'agent';
-
-const COMMISSION_TYPES: CommissionType[] = ['Flat', 'Slab based', 'Turnover based'];
 
 const COPY: Record<StaffRole, { noun: string; subtitle: string; parent?: string }> = {
   franchise: { noun: 'Franchise', subtitle: 'Register a new franchise account' },
   'super-agent': { noun: 'Super Agent', subtitle: 'Manage super agent account', parent: 'Franchise' },
   agent: { noun: 'Agent', subtitle: 'Manage agent account', parent: 'Super Agent' },
 };
-
-const SPLITS = [
-  ['matchCommission', 'Match Commission'],
-  ['myMatchCommission', 'My Match Commission'],
-  ['sessionCommission', 'Session Commission'],
-  ['mySessionCommission', 'My Session Commission'],
-] as const;
 
 const str = (value: number | null | undefined) => (value === null || value === undefined ? '' : String(value));
 
@@ -48,8 +41,8 @@ export type StaffFormModalProps = {
 export function StaffFormModal({ role, account, parents, onClose, onSaved }: StaffFormModalProps) {
   const { accessToken } = useAuth();
   const { can } = usePermissions();
-  /** Commission terms are set by whoever holds the "Commission Settings" grant (the admin, by default). */
-  const canSetCommission = can('accountSettings', 'commissionSettings', 'X');
+  /** Share holding is set by whoever holds the "Commission Settings" grant (the admin, by default). */
+  const canSetShare = can('accountSettings', 'commissionSettings', 'X');
   const copy = COPY[role];
   const isEdit = account !== null;
   const isFranchise = role === 'franchise';
@@ -63,16 +56,11 @@ export function StaffFormModal({ role, account, parents, onClose, onSaved }: Sta
     email: account?.email ?? '',
     state: account?.state ?? '',
     city: account?.city ?? '',
-    creditLimit: account ? str(account.creditLimit) : '',
     bettingLimit: account?.bettingLimit ? str(account.bettingLimit) : '',
     maxExposure: account?.maxExposure ? str(account.maxExposure) : '',
-    commissionRate: str(account?.commissionRate),
-    commissionType: account?.commissionType ?? '',
     shareHolding: str(account?.shareHolding),
-    matchCommission: str(account?.matchCommission),
-    myMatchCommission: str(account?.myMatchCommission),
-    sessionCommission: str(account?.sessionCommission),
-    mySessionCommission: str(account?.mySessionCommission),
+    matchCommission: account?.matchCommission ? str(account.matchCommission) : '',
+    sessionCommission: account?.sessionCommission ? str(account.sessionCommission) : '',
     username: account?.username ?? '',
     password: '',
   });
@@ -81,6 +69,10 @@ export function StaffFormModal({ role, account, parents, onClose, onSaved }: Sta
 
   const set = (key: keyof typeof form) => (value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
+
+  /** The upline this account sits under — its own rates are the most it can be given. */
+  const upline = isEdit ? account.parent : parents[parentLabels.indexOf(form.parent)];
+  const cap = isFranchise ? null : commissionCap(upline);
 
   /** '' = no limit of its own (the platform's applies). */
   const rupeeLimit = (label: string, raw: string) => {
@@ -115,8 +107,6 @@ export function StaffFormModal({ role, account, parents, onClose, onSaved }: Sta
     if (!accessToken) return;
     setError(null);
     try {
-      const credit = form.creditLimit.trim() === '' ? 0 : Number(form.creditLimit);
-      if (Number.isNaN(credit) || credit < 0) throw new Error('Credit limit must be a positive number.');
       if (!form.name.trim()) throw new Error(isFranchise ? 'Owner name is required.' : 'Full name is required.');
       if (isFranchise && !form.businessName.trim()) throw new Error('Franchise name is required.');
       if (form.phone.trim() && !isMobile(form.phone.trim())) throw new Error('Enter a valid 10-digit mobile number.');
@@ -127,18 +117,16 @@ export function StaffFormModal({ role, account, parents, onClose, onSaved }: Sta
         email: form.email.trim(),
         state: form.state.trim(),
         city: form.city.trim(),
-        creditLimit: credit,
         bettingLimit: rupeeLimit('Betting limit', form.bettingLimit),
         maxExposure: rupeeLimit('Max exposure', form.maxExposure),
-        ...(canSetCommission ? { commissionRate: percent('Commission %', form.commissionRate) } : {}),
+        matchCommission: parseCommission('Match', form.matchCommission, cap),
+        sessionCommission: parseCommission('Session', form.sessionCommission, cap),
       };
       if (isFranchise) {
         draft.businessName = form.businessName.trim();
       }
-      if (isFranchise && canSetCommission) {
-        if (form.commissionType) draft.commissionType = form.commissionType as CommissionType;
+      if (isFranchise && canSetShare) {
         draft.shareHolding = percent('Share holding', form.shareHolding);
-        for (const [key, label] of SPLITS) draft[key] = percent(label, form[key]);
       }
 
       setPending(true);
@@ -227,30 +215,24 @@ export function StaffFormModal({ role, account, parents, onClose, onSaved }: Sta
               />
             </>
           ) : null}
-          {role !== 'agent' ? (
-            <TextField
-              label="Credit Limit (₹)"
-              labelCase="caps"
-              inputMode="numeric"
-              placeholder="0"
-              value={form.creditLimit}
-              onChange={(event) => set('creditLimit')(event.target.value)}
-            />
-          ) : null}
-          {!isFranchise ? (
-            <TextField
-              label={canSetCommission ? 'Commission %' : 'Commission % (set by admin)'}
-              labelCase="caps"
-              inputMode="decimal"
-              placeholder="Platform default"
-              value={form.commissionRate}
-              readOnly={!canSetCommission}
-              disabled={!canSetCommission}
-              onChange={(event) => set('commissionRate')(event.target.value)}
-            />
-          ) : null}
           <TextField
-            label="Max Stake per Bet (₹)"
+            label={commissionLabel('Match', cap)}
+            labelCase="caps"
+            inputMode="decimal"
+            placeholder="0"
+            value={form.matchCommission}
+            onChange={(event) => set('matchCommission')(event.target.value)}
+          />
+          <TextField
+            label={commissionLabel('Session', cap)}
+            labelCase="caps"
+            inputMode="decimal"
+            placeholder="0"
+            value={form.sessionCommission}
+            onChange={(event) => set('sessionCommission')(event.target.value)}
+          />
+          <TextField
+            label={withCurrency('Max Stake per Bet (₹)')}
             labelCase="caps"
             inputMode="numeric"
             placeholder="Platform limit"
@@ -258,7 +240,7 @@ export function StaffFormModal({ role, account, parents, onClose, onSaved }: Sta
             onChange={(event) => set('bettingLimit')(event.target.value)}
           />
           <TextField
-            label="Max Open Exposure (₹)"
+            label={withCurrency('Max Open Exposure (₹)')}
             labelCase="caps"
             inputMode="numeric"
             placeholder="No limit"
@@ -284,43 +266,14 @@ export function StaffFormModal({ role, account, parents, onClose, onSaved }: Sta
               />
             </>
           ) : null}
-          {isFranchise ? (
-            <>
-              <SelectField
-                label="Commission Type"
-                options={COMMISSION_TYPES}
-                placeholder="Select Commission Type"
-                value={form.commissionType}
-                onChange={(event) => set('commissionType')(event.target.value)}
-              />
-              <TextField
-                label="Share Holding"
-                labelCase="caps"
-                placeholder="--%"
-                value={form.shareHolding}
-                onChange={(event) => set('shareHolding')(event.target.value)}
-              />
-              <TextField
-                label="Commission %"
-                labelCase="caps"
-                inputMode="decimal"
-                placeholder="Platform default"
-                value={form.commissionRate}
-                onChange={(event) => set('commissionRate')(event.target.value)}
-              />
-              {form.commissionType
-                ? SPLITS.map(([key, label]) => (
-                    <TextField
-                      key={key}
-                      label={label}
-                      labelCase="caps"
-                      placeholder="--%"
-                      value={form[key]}
-                      onChange={(event) => set(key)(event.target.value)}
-                    />
-                  ))
-                : null}
-            </>
+          {isFranchise && canSetShare ? (
+            <TextField
+              label="Share Holding"
+              labelCase="caps"
+              placeholder="--%"
+              value={form.shareHolding}
+              onChange={(event) => set('shareHolding')(event.target.value)}
+            />
           ) : null}
         </div>
 

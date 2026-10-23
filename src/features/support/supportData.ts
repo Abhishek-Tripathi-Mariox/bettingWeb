@@ -9,7 +9,7 @@ import {
 } from '../../components/icons';
 import type { StatCardProps } from '../../components/ui/StatCard/StatCard';
 import type { ApiTicket, TicketPriority, TicketStatus, TicketUserRef } from '../../lib/api/support';
-import { formatCount } from '../../lib/format';
+import { formatCount, platformTimeZone } from '../../lib/format';
 
 /**
  * rgb triplets per priority and status. Orange (#ff9800) and the muted grey
@@ -67,7 +67,7 @@ export const ticketCode = (ticket: ApiTicket) => `TKT-${ticket._id.slice(-6).toU
 export function formatTicketDate(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+  return date.toLocaleString('en-IN', { timeZone: platformTimeZone(), day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 export function ticketStats(tickets: ApiTicket[]): StatCardProps[] {

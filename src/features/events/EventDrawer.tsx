@@ -85,8 +85,9 @@ export function EventDrawer({ eventId, onClose, onChanged }: EventDrawerProps) {
     if (!accessToken || !detail) return;
     setSuspending(true);
     try {
-      const res = await eventsApi.updateStatus(detail.event._id, 'Suspended', accessToken);
-      setDetail((current) => (current ? { ...current, event: res.event } : current));
+      await eventsApi.updateStatus(detail.event._id, 'Suspended', accessToken);
+      // Suspending also closes the event's markets — reload so the tiles and tabs show it.
+      setDetail(await eventsApi.get(detail.event._id, accessToken));
       onChanged?.();
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : 'Unable to suspend this event.');
