@@ -5,7 +5,7 @@ import { API_BASE_URL, rotateTokens } from './api';
 import { useAuth } from '../features/auth/authContext';
 
 /** Server events (see backend/src/realtime.js). */
-export type LiveEvent = 'odds' | 'matches:changed' | 'admin:changed' | 'permissions:changed';
+export type LiveEvent = 'odds' | 'matches:changed' | 'admin:changed' | 'permissions:changed' | 'config:changed';
 
 let socket: Socket | null = null;
 let tokenRef: string | null = null;

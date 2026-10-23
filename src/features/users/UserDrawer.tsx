@@ -1,6 +1,6 @@
 import { usePermissions } from '../auth/usePermissions';
 import { useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import {
   BanIcon,
   CalendarIcon,
@@ -13,9 +13,7 @@ import {
   PhoneIcon,
   PulseIcon,
   SmartphoneIcon,
-  UserCheckIcon,
   UserIcon,
-  XCircleIcon,
 } from '../../components/icons';
 import { Badge } from '../../components/ui/Badge/Badge';
 import { Button } from '../../components/ui/Button/Button';
@@ -25,13 +23,12 @@ import { Tabs } from '../../components/ui/Tabs/Tabs';
 import { useAuth } from '../auth/authContext';
 import { ApiRequestError } from '../../lib/api';
 import { displayName, networkApi } from '../../lib/api/network';
-import type { DetailBet, KycState, NetworkDetail } from '../../lib/api/network';
+import type { DetailBet, NetworkDetail } from '../../lib/api/network';
 import { useNetworkDetail } from './useNetworkList';
-import { formatIp, formatMobile, formatRelativeTime, formatRupees } from '../../lib/format';
+import { formatIp, formatRelativeTime, formatRupees } from '../../lib/format';
 import { AddUserModal } from './AddUserModal';
 import {
   ACTIVITY_TITLE,
-  KYC_TONE,
   RISK_TONE,
   STATUS_TONE,
   describeUserAgent,
@@ -41,7 +38,7 @@ import {
 } from './usersData';
 import styles from './UserDrawer.module.css';
 
-const TABS = ['Overview', 'Bets', 'Transactions', 'Kyc', 'Activity', 'Devices'] as const;
+const TABS = ['Overview', 'Bets', 'Transactions', 'Activity', 'Devices'] as const;
 type Tab = (typeof TABS)[number];
 
 const errorMessage = (err: unknown) =>
@@ -64,12 +61,11 @@ export function UserDrawer({ accountId, defaultTab = 'Overview', showAgent = fal
   const { detail, error, setError, reload: load } = useNetworkDetail(accountId);
   const [tab, setTab] = useState<Tab>(defaultTab);
   const { can } = usePermissions();
-  // Tabs follow the Permissions page: View Bets, Wallet Balance (ledger) and KYC Details.
+  // Tabs follow the Permissions page: View Bets and Wallet Balance (ledger).
   const visibleTabs = TABS.filter(
     (name) =>
       (name !== 'Bets' || can('bettingMarkets', 'viewBets', 'V')) &&
-      (name !== 'Transactions' || can('finance', 'walletBalance', 'V')) &&
-      (name !== 'Kyc' || can('userManagement', 'kycDetails', 'V')),
+      (name !== 'Transactions' || can('finance', 'walletBalance', 'V')),
   );
   const [pending, setPending] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -101,8 +97,6 @@ export function UserDrawer({ accountId, defaultTab = 'Overview', showAgent = fal
   const status = statusLabel(account);
   const agent = account.parent ? displayName(account.parent) : null;
 
-  const setKyc = (kyc: KycState, reason?: string) =>
-    accessToken && run(() => networkApi.update(account._id, { kyc, kycRejectionReason: reason }, accessToken));
   const toggleStatus = () =>
     accessToken &&
     run(() => networkApi.setStatus(account._id, account.status === 'suspended' ? 'active' : 'suspended', accessToken));
@@ -133,7 +127,7 @@ export function UserDrawer({ accountId, defaultTab = 'Overview', showAgent = fal
           <div className={styles.metrics}>
             <MetricTile label="Balance" value={formatRupees(account.walletBalance)} color="var(--color-success)" />
             <MetricTile label="Total Bets" value={String(detail.summary.bets)} color="var(--color-primary)" />
-            <MetricTile label="KYC Status" value={account.kyc.toLowerCase()} color={TONE_COLOR[KYC_TONE[account.kyc]]} />
+            <MetricTile label="Open Bets" value={String(detail.summary.openBets)} color="var(--color-warning)" />
             <MetricTile
               label="Risk Level"
               value={detail.summary.risk.toUpperCase()}
@@ -184,7 +178,7 @@ export function UserDrawer({ accountId, defaultTab = 'Overview', showAgent = fal
           onVoid={
             can('bettingMarkets', 'voidBet', 'X') && accessToken
               ? (bet) => {
-                  const reason = window.prompt(`Void this ₹${bet.amount} bet? The stake goes back to the player.\nReason (optional):`);
+                  const reason = window.prompt(`Void this ${formatRupees(bet.amount)} bet? The stake goes back to the player.\nReason (optional):`);
                   if (reason !== null) void run(() => networkApi.voidBet(accessToken, bet._id, reason.trim() || undefined));
                 }
               : undefined
@@ -220,10 +214,6 @@ export function UserDrawer({ accountId, defaultTab = 'Overview', showAgent = fal
             ))
           )}
         </div>
-      ) : null}
-
-      {tab === 'Kyc' ? (
-        <KycTab kyc={account.kyc} submission={detail.kycSubmission} canEdit={abilities.edit} pending={pending} onSet={setKyc} />
       ) : null}
 
       {tab === 'Activity' ? (
@@ -270,7 +260,6 @@ export function UserDrawer({ accountId, defaultTab = 'Overview', showAgent = fal
           account={account}
           agents={[]}
           agentOptional
-          canSetKyc={abilities.edit}
           onClose={() => setEditing(false)}
           onSaved={() => {
             setEditing(false);
@@ -300,10 +289,13 @@ function DetailRow({ icon, label, value }: { icon: ReactNode; label: string; val
   );
 }
 
+// A removed match leaves the bet's own snapshot of the names.
 const betName = (bet: DetailBet) =>
-  !bet.event ? '—' : typeof bet.event === 'string' ? bet.event.slice(-6) : bet.event.name;
-const marketName = (bet: DetailBet) =>
-  !bet.market || typeof bet.market === 'string' ? bet.selection : `${bet.market.name} · ${bet.selection}`;
+  bet.event && typeof bet.event !== 'string' ? bet.event.name : bet.eventName || (typeof bet.event === 'string' ? bet.event.slice(-6) : '—');
+const marketName = (bet: DetailBet) => {
+  const name = bet.market && typeof bet.market !== 'string' ? bet.market.name : bet.marketName;
+  return name ? `${name} · ${bet.selection}` : bet.selection;
+};
 
 const BET_TONE = { Pending: 'info', Won: 'success', Lost: 'danger', Void: 'neutral' } as const;
 
@@ -359,141 +351,6 @@ export function BetsTab({
           );
         })
       )}
-    </div>
-  );
-}
-
-const KYC_BANNER_RGB: Record<KycState, string> = {
-  'Not Submitted': '184, 194, 204',
-  Verified: '34, 197, 94',
-  Pending: '250, 204, 21',
-  Rejected: '239, 68, 68',
-};
-
-const KYC_BANNER_META: Record<KycState, string> = {
-  'Not Submitted': 'The user has not submitted KYC documents from the app yet.',
-  Pending: 'Documents submitted — waiting for review.',
-  Verified: 'Identity verified.',
-  Rejected: 'Rejected — the user can resubmit from the app.',
-};
-
-/** KYC file — node 79:9518, showing what the player submitted from the app's KYC flow. */
-function KycTab({
-  kyc,
-  submission,
-  canEdit,
-  pending,
-  onSet,
-}: {
-  kyc: KycState;
-  submission: NetworkDetail['kycSubmission'];
-  canEdit: boolean;
-  pending: boolean;
-  onSet: (kyc: KycState, reason?: string) => void;
-}) {
-  const [reason, setReason] = useState('');
-  const rgb = KYC_BANNER_RGB[kyc];
-  const fields = submission
-    ? [
-        { label: 'Full Name', value: submission.fullName },
-        { label: 'Mobile Number', value: submission.phone ? formatMobile(submission.phone) : '—' },
-        { label: 'Date of Birth', value: formatDate(submission.dob) },
-        { label: 'Address', value: submission.address },
-        { label: 'City / State', value: `${submission.city}, ${submission.state}` },
-        { label: 'Country', value: submission.country },
-        { label: 'Postal Code', value: submission.postalCode },
-        { label: submission.documentType, value: submission.documentNumber },
-      ]
-    : [];
-
-  return (
-    <div className={styles.kycStack}>
-      <div
-        className={styles.kycBanner}
-        style={
-          {
-            '--banner-bg': `rgba(${rgb}, 0.08)`,
-            '--banner-border': `rgba(${rgb}, 0.2)`,
-            '--banner-color': `rgb(${rgb})`,
-          } as CSSProperties
-        }
-      >
-        <UserCheckIcon size={23.999} />
-        <div>
-          <p className={styles.kycBannerTitle}>KYC Status: {kyc}</p>
-          <p className={styles.kycBannerMeta}>
-            {submission ? `Ref ${submission.referenceId} · submitted ${formatDate(submission.createdAt)}. ` : ''}
-            {KYC_BANNER_META[kyc]}
-            {kyc === 'Rejected' && submission?.rejectionReason ? ` Reason: ${submission.rejectionReason}` : ''}
-          </p>
-        </div>
-      </div>
-
-      {submission ? (
-        <>
-          <div className={styles.list}>
-            {fields.map((field) => (
-              <article key={field.label} className={styles.row}>
-                <p className={styles.rowTitle}>{field.label}</p>
-                <p className={styles.kycValue}>{field.value}</p>
-              </article>
-            ))}
-          </div>
-          <div className={styles.kycDocs}>
-            {[
-              { label: 'Front', file: submission.front },
-              { label: 'Back', file: submission.back },
-            ].map(({ label, file }) =>
-              file ? (
-                <a key={label} className={styles.kycDoc} href={file.data} target="_blank" rel="noreferrer" download={file.name}>
-                  {file.mime.startsWith('image/') ? (
-                    <img className={styles.kycDocImage} src={file.data} alt={`${label} of ${submission.documentType}`} />
-                  ) : (
-                    <span className={styles.kycDocFile}>PDF</span>
-                  )}
-                  <span className={styles.kycDocLabel}>
-                    {label} · {file.name || 'document'}
-                  </span>
-                </a>
-              ) : null,
-            )}
-          </div>
-        </>
-      ) : kyc !== 'Not Submitted' ? (
-        <p className={styles.empty}>You don't have permission to view this user's KYC documents.</p>
-      ) : null}
-
-      {canEdit && kyc === 'Pending' ? (
-        <>
-          <input
-            className={styles.kycReason}
-            placeholder="Rejection reason (shown to the user)"
-            value={reason}
-            maxLength={200}
-            onChange={(event) => setReason(event.target.value)}
-          />
-          <div className={styles.kycActions}>
-            <Button
-              className={styles.approve}
-              size="sm"
-              disabled={pending}
-              icon={<CheckCircleIcon size={12.991} />}
-              onClick={() => onSet('Verified')}
-            >
-              Approve KYC
-            </Button>
-            <Button
-              className={styles.reject}
-              size="sm"
-              disabled={pending || !reason.trim()}
-              icon={<XCircleIcon size={12.991} />}
-              onClick={() => onSet('Rejected', reason.trim())}
-            >
-              Reject KYC
-            </Button>
-          </div>
-        </>
-      ) : null}
     </div>
   );
 }

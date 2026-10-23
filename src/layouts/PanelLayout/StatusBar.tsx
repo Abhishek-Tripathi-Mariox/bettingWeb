@@ -25,7 +25,7 @@ export function StatusBar({ clock }: { clock: string }) {
         ) : null}
       </div>
       <span className={styles.build}>
-        {build} · IST {clock}
+        {build} · {clock}
       </span>
     </footer>
   );

@@ -22,6 +22,7 @@ import { AgentDrawer } from '../agents/AgentDrawer';
 import { StaffFormModal } from '../superAgents/StaffFormModal';
 import { UserDrawer } from '../users/UserDrawer';
 import { statusLabel } from '../users/usersData';
+import { describeCommission } from '../users/commissionRates';
 import { useNetworkDetail } from '../users/useNetworkList';
 import { FRANCHISE_STATUS_TONE, formatJoined, toNetworkPerson } from './franchisesData';
 import { NetworkRow, NetworkSection, SummaryRow } from './NetworkRows';
@@ -235,11 +236,7 @@ function OverviewTab({
             </div>
           </div>
           <span className={styles.tier}>
-            {account.commissionRate !== null
-              ? `${account.commissionRate}% commission`
-              : account.commissionRateInForce
-                ? `${account.commissionRateInForce}% commission (default)`
-                : 'Default rate'}
+            {describeCommission(account)}
           </span>
         </div>
       ) : null}

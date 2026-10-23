@@ -23,7 +23,14 @@ export type ApiMarket = {
   maxExposure: number;
   status: ApiMarketStatus;
   /** Backable selections; empty = the event's two sides at back / lay odds. */
-  runners?: { name: string; odds: number; active?: boolean }[];
+  runners?: { name: string; odds: number; active?: boolean; line?: number | null; rate?: number | null }[];
+  /** 'back' — pick a selection; 'session' — No / Yes on a run line (settled by runs); 'view' — shown only. */
+  betStyle?: 'back' | 'session' | 'view';
+  /** The app tab it's listed under ("Match Odds", "Normal", "Odd Even", …). */
+  group?: string;
+  /** Feed type: match, match1, fancy, fancy1, fancy2, oddeven, cricketcasino, meter. */
+  providerType?: string;
+  remark?: string;
   /** Feed markets (Diamond): prices and status come from the feed, so they aren't edited by hand. */
   externalId?: string | null;
   /** Last raw answer from the feed's result endpoint, while the market waits for a result. */

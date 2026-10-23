@@ -18,7 +18,7 @@ import { usePermissions } from '../auth/usePermissions';
 import { ticketCode } from './supportData';
 import styles from './MyTickets.module.css';
 
-const CATEGORIES = ['General', 'Wallet', 'KYC', 'Betting', 'Commission', 'Technical'];
+const CATEGORIES = ['General', 'Wallet', 'Betting', 'Commission', 'Technical'];
 const PRIORITIES: TicketPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
 
 const STATUS_TONE: Record<TicketStatus, BadgeTone> = {

@@ -8,6 +8,9 @@ export type ApiRiskEventRef = {
 };
 
 /** A Market document, as returned by the risk endpoints (`risk.service.js#getExposure`). */
+/** Settings → Exposure Limits: utilization % at which a market reads Warning / Critical. */
+export type RiskThresholds = { warningPercent: number; criticalPercent: number };
+
 export type ApiRiskMarket = {
   _id: string;
   event: string | ApiRiskEventRef;
@@ -86,7 +89,7 @@ export const riskApi = {
   stats: (accessToken?: string | null) => apiRequest<{ stats: ApiRiskStats }>('/risk/stats', { accessToken }),
 
   exposure: (accessToken?: string | null) =>
-    apiRequest<{ markets: ApiRiskMarket[] }>('/risk/exposure', { accessToken }),
+    apiRequest<{ markets: ApiRiskMarket[]; thresholds?: RiskThresholds }>('/risk/exposure', { accessToken }),
 
   panels: (accessToken?: string | null) => apiRequest<ApiRiskPanels>('/risk/panels', { accessToken }),
 

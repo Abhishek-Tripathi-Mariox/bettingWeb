@@ -13,6 +13,9 @@ export type CmsContentItem = {
   target: string;
   title: string;
   body: string;
+  /** Banners: picture for the app's home carousel, and where a tap goes. */
+  imageUrl?: string;
+  link?: string;
   views: number;
   createdAt: string;
   updatedAt: string;
@@ -24,6 +27,8 @@ export type CmsContentDraft = {
   body?: string;
   status?: CmsStatus;
   target?: string;
+  imageUrl?: string;
+  link?: string;
 };
 
 export type CmsContentUpdate = Partial<Omit<CmsContentDraft, 'kind'>>;

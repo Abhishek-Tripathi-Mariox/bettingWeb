@@ -9,7 +9,7 @@ import { DataTable } from '../../components/ui/DataTable/DataTable';
 import type { Column } from '../../components/ui/DataTable/DataTable';
 import { StatCard } from '../../components/ui/StatCard/StatCard';
 import { cx } from '../../lib/cx';
-import { formatCount, formatMoney } from '../../lib/format';
+import { formatCount, formatMoney, formatRupees } from '../../lib/format';
 import { ApiRequestError } from '../../lib/api';
 import { eventsApi } from '../../lib/api/events';
 import type { ApiEvent } from '../../lib/api/events';
@@ -100,8 +100,8 @@ export function MarketsPage() {
   const selectionsFor = (row: ApiMarket) => {
     if (row.runners?.length) return row.runners.map((r) => r.name);
     const name = typeof row.event === 'string' ? '' : row.event.name;
-    const [home, away] = name.split(/\s+vs\.?\s+/i);
-    return [home || name, away || 'Draw'].filter(Boolean);
+    const [home, away] = name.split(/\s+(?:vs\.?|v\.?|-)\s+/i);
+    return [home || 'Home', away || 'Away'];
   };
 
   const settle = async () => {
@@ -110,10 +110,10 @@ export function MarketsPage() {
     try {
       if (settling.winner === VOID) {
         const res = await marketsApi.void(settling.id, 'Match abandoned / no result', accessToken);
-        setNotice(`Market voided: ${res.voided} open bets returned (₹${res.released.toLocaleString('en-IN')} released).`);
+        setNotice(`Market voided: ${res.voided} open bets returned (${formatRupees(res.released)} released).`);
       } else {
         const res = await marketsApi.settle(settling.id, settling.winner, accessToken);
-        setNotice(`Settled on ${settling.winner}: ${res.settled} bets (${res.won} won, ${res.lost} lost).`);
+        setNotice(`Settled on ${res.market?.winner ?? settling.winner}: ${res.settled} bets (${res.won} won, ${res.lost} lost).`);
       }
       setSettling(null);
       setReloadKey((key) => key + 1);
@@ -162,7 +162,7 @@ export function MarketsPage() {
       render: (row) => (
         <div>
           <p className={styles.name}>{row.name}</p>
-          <p className={styles.code}>{row.externalId ? `${row.type} · Live feed (Diamond)` : row.code}</p>
+          <p className={styles.code}>{row.externalId ? `${row.group || row.type} · Live feed (Diamond)` : row.code}</p>
         </div>
       ),
     },
@@ -175,8 +175,24 @@ export function MarketsPage() {
         </span>
       ),
     },
-    { key: 'back', header: 'Back Odds', render: (row) => <span className={styles.back}>{row.backOdds.toFixed(2)}</span> },
-    { key: 'lay', header: 'Lay Odds', render: (row) => <span className={styles.lay}>{row.layOdds.toFixed(2)}</span> },
+    {
+      key: 'prices',
+      header: 'Prices',
+      // Session sides read "No 73 @100 · Yes 74 @100"; back markets list each selection's odds.
+      render: (row) => (
+        <span className={styles.back}>
+          {(row.runners?.length ? row.runners : [{ name: 'Back', odds: row.backOdds }, { name: 'Lay', odds: row.layOdds }])
+            .slice(0, 4)
+            .map((r) =>
+              r.line != null
+                ? `${r.name} ${r.line && r.rate ? `${r.line} @${r.rate}` : '—'}` // 0 = no line (ball running)
+                : `${r.name} ${r.odds.toFixed(2)}`,
+            )
+            .join(' · ')}
+          {(row.runners?.length ?? 0) > 4 ? ` · +${(row.runners?.length ?? 0) - 4}` : ''}
+        </span>
+      ),
+    },
     { key: 'bets', header: 'Bets', render: (row) => <span className={styles.bets}>{formatCount(row.bets)}</span> },
     { key: 'stake', header: 'Stake', render: (row) => <span className={styles.stake}>{formatMoney(row.stake)}</span> },
     { key: 'exposure', header: 'Exposure', render: (row) => <span className={styles.exposure}>{formatMoney(row.exposure)}</span> },
@@ -199,9 +215,22 @@ export function MarketsPage() {
       render: (row) =>
         row.winner ? null : settling?.id === row._id ? (
           <div className={styles.rowActions}>
+            {row.betStyle === 'session' || row.betStyle === 'view' ? (
+              // Session lines settle on the runs scored: each bet wins on its own line.
+              <input
+                className={styles.settleSelect}
+                type="number"
+                min={0}
+                placeholder="Runs scored"
+                aria-label="Runs scored"
+                value={settling.winner === VOID ? '' : settling.winner}
+                onChange={(e) => setSettling({ id: row._id, winner: e.target.value })}
+              />
+            ) : null}
             <select
               className={styles.settleSelect}
               aria-label="Winning selection"
+              hidden={row.betStyle === 'session' || row.betStyle === 'view'}
               value={settling.winner}
               onChange={(e) => setSettling({ id: row._id, winner: e.target.value })}
             >
@@ -222,6 +251,11 @@ export function MarketsPage() {
             >
               {rowPending === row._id ? 'Settling…' : 'Confirm'}
             </Button>
+            {row.betStyle === 'session' || row.betStyle === 'view' ? (
+              <Button className={styles.suspend} size="xs" onClick={() => setSettling({ id: row._id, winner: VOID })}>
+                Void
+              </Button>
+            ) : null}
             <Button className={styles.edit} size="xs" onClick={() => setSettling(null)}>
               Cancel
             </Button>

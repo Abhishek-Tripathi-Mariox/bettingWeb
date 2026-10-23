@@ -1,11 +1,7 @@
 import type { CSSProperties } from 'react';
 import { SectionCard } from '../../components/ui/SectionCard/SectionCard';
-import { cx } from '../../lib/cx';
-import {
-  SUPPORT_CHANNELS,
-  SUPPORT_INTRO,
-  SUPPORT_WINDOWS,
-} from './contactSupportData';
+import { useAppConfig } from '../../lib/appConfigContext';
+import { SUPPORT_INTRO, supportChannels } from './contactSupportData';
 import { MyTickets } from './MyTickets';
 import styles from './ContactSupportPage.module.css';
 
@@ -15,6 +11,8 @@ import styles from './ContactSupportPage.module.css';
  * SupportTicketsPage; the Franchise nav points here.
  */
 export function ContactSupportPage() {
+  const { support } = useAppConfig();
+  const channels = supportChannels(support);
   return (
     <div className={styles.page}>
       <header className={styles.intro}>
@@ -25,8 +23,14 @@ export function ContactSupportPage() {
         <p className={styles.introSubtitle}>{SUPPORT_INTRO.subtitle}</p>
       </header>
 
+      {channels.length === 0 ? (
+        <p className={styles.noticeBody}>
+          Support contacts haven’t been set up yet — raise a ticket below and the support team will reply here.
+        </p>
+      ) : null}
+
       <div className={styles.channels}>
-        {SUPPORT_CHANNELS.map((channel) => (
+        {channels.map((channel) => (
           <article
             key={channel.title}
             className={styles.channel}
@@ -72,22 +76,19 @@ export function ContactSupportPage() {
         </div>
       </aside>
 
-      <SectionCard title="Support Hours" size="md">
-        <div className={styles.hours}>
-          {SUPPORT_WINDOWS.map((window) => (
-            <div key={window.day} className={styles.window}>
+      {support.hours ? (
+        <SectionCard title="Support Hours" size="md">
+          <div className={styles.hours}>
+            <div className={styles.window}>
               <div className={styles.windowText}>
-                <p className={styles.windowDay}>{window.day}</p>
-                <p className={styles.windowHours}>{window.hours}</p>
+                <p className={styles.windowDay}>Open</p>
+                <p className={styles.windowHours}>{support.hours}</p>
               </div>
-              <span
-                className={cx(styles.windowDot, !window.open && styles.limited)}
-                aria-hidden="true"
-              />
+              <span className={styles.windowDot} aria-hidden="true" />
             </div>
-          ))}
-        </div>
-      </SectionCard>
+          </div>
+        </SectionCard>
+      ) : null}
     </div>
   );
 }

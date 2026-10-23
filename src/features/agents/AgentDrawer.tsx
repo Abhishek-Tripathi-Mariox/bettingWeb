@@ -27,6 +27,7 @@ import { walletApi } from '../../lib/api/wallet';
 import { formatIp, formatMoney, formatPercent, formatRelativeTime, formatRupees } from '../../lib/format';
 import { StaffFormModal } from '../superAgents/StaffFormModal';
 import { UserDrawer } from '../users/UserDrawer';
+import { describeCommission } from '../users/commissionRates';
 import { ACTIVITY_TITLE, formatDate, statusLabel } from '../users/usersData';
 import { useNetworkDetail } from '../users/useNetworkList';
 import { WalletActionModal } from '../wallet/WalletActionModal';
@@ -167,6 +168,7 @@ export function AgentDrawer({
 }
 
 function OverviewTab({ detail, onJump }: { detail: NetworkDetail; onJump: (tab: Tab) => void }) {
+  const { can } = usePermissions();
   const { account, summary, ancestors } = detail;
   const superAgent = ancestors[0];
   const franchise = ancestors.find((ref) => ref.role === 'franchise');
@@ -178,13 +180,7 @@ function OverviewTab({ detail, onJump }: { detail: NetworkDetail; onJump: (tab: 
         <MetricTile label="Turnover" value={formatMoney(summary.turnover)} color="var(--color-warning)" />
         <MetricTile label="Commission" value={formatMoney(summary.commission)} color="var(--color-primary)" />
         <MetricTile label="Wallet Balance" value={formatRupees(account.walletBalance)} color="var(--color-primary-light)" />
-        <MetricTile label="Commission %" value={
-            account.commissionRate !== null
-              ? `${account.commissionRate}%`
-              : account.commissionRateInForce
-                ? `${account.commissionRateInForce}% (default)`
-                : 'Platform default'
-          } color="var(--color-text-muted)" />
+        <MetricTile label="Commission %" value={describeCommission(account)} color="var(--color-text-muted)" />
         <MetricTile label="Joined" value={formatDate(account.createdAt)} color="var(--color-text-muted)" />
       </div>
 
@@ -226,9 +222,11 @@ function OverviewTab({ detail, onJump }: { detail: NetworkDetail; onJump: (tab: 
         <Button variant="primary" size="sm" icon={<UsersIcon size={13} />} onClick={() => onJump('Users')}>
           View Users
         </Button>
-        <Button className={styles.ctaWallet} size="sm" icon={<WalletIcon size={13} />} onClick={() => onJump('Wallet')}>
-          Wallet
-        </Button>
+        {can('finance', 'walletBalance', 'V') ? (
+          <Button className={styles.ctaWallet} size="sm" icon={<WalletIcon size={13} />} onClick={() => onJump('Wallet')}>
+            Wallet
+          </Button>
+        ) : null}
         <Button className={styles.ctaReports} size="sm" icon={<AnalyticsIcon size={13} />} onClick={() => onJump('Reports')}>
           Reports
         </Button>

@@ -6,7 +6,7 @@ import {
 } from '../../components/icons';
 import type { BadgeTone } from '../../components/ui/Badge/Badge';
 import type { StatCardProps } from '../../components/ui/StatCard/StatCard';
-import { formatCount, formatMoney } from '../../lib/format';
+import { formatCount, formatMoney, platformTimeZone } from '../../lib/format';
 import type { ApiPartner, ApiPartnerSettlement, ApiPartnerStatus, ApiRevenueEntry, ApiSettlementPartnerRef } from '../../lib/api/partnership';
 
 /** Curated type options offered in the Add/Edit form — the backend stores `type` as a free string, not a validated enum. */
@@ -46,7 +46,7 @@ export const PARTNER_STATUS_TONE: Record<PartnerStatus, BadgeTone> = {
 export function formatSince(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+  return date.toLocaleDateString('en-IN', { timeZone: platformTimeZone(), month: 'short', year: 'numeric' });
 }
 
 export function formatBetVolume(volume: number): string {

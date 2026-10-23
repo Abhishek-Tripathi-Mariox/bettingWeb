@@ -13,11 +13,13 @@ import { Badge } from '../../components/ui/Badge/Badge';
 import { Button } from '../../components/ui/Button/Button';
 import { Meter } from '../../components/ui/ProgressBar/ProgressBar';
 import { PillTabs } from '../../components/ui/PillTabs/PillTabs';
+import { SelectField } from '../../components/ui/TextField/SelectField';
 import { TextField } from '../../components/ui/TextField/TextField';
 import { useBranding } from '../../lib/brandingContext';
 import { useAuth } from '../auth/authContext';
 import { ApiRequestError } from '../../lib/api';
 import { settingsApi } from '../../lib/api/settings';
+import { withCurrency } from '../../lib/format';
 import type { ApiKeyEntry, ApiSettings, SettingsSection, SettingsValues } from '../../lib/api/settings';
 import { BRAND_COLOR_FIELDS, COMMISSION_CEILING, SECTION_FIELDS, SETTINGS_TABS } from './settingsData';
 import type { SectionField } from './settingsData';
@@ -111,8 +113,9 @@ export function LiveSettings() {
       ) : null}
 
       {tab === 'Commission'
-        ? card('commissionRates', 'Commission Structure', 'Save Commission Structure', {
-            subtitle: 'Set commission percentages by hierarchy level',
+        ? card('commissionRates', 'Referral Bonus', 'Save Referral Bonus', {
+            subtitle:
+              'Session and match commission is set on each account (Franchise → Super Agent → Agent → User) and paid at the end of every match.',
             rates: true,
           })
         : null}
@@ -120,13 +123,23 @@ export function LiveSettings() {
       {tab === 'Notifications' ? (
         <div className={styles.pair}>
           {card('smtp', 'Email Notifications', 'Save SMTP', {
-            subtitle: 'SMTP / email provider config',
+            subtitle: 'Sends password-reset codes by email. Blank host = the server’s SMTP_* settings.',
             fieldIcon: <MailIcon size={12.992} />,
+            test: {
+              label: 'Send Test Email',
+              placeholder: 'you@example.com',
+              send: (to) => settingsApi.testEmail(to, accessToken!),
+            },
           })}
           {card('sms', 'SMS / OTP Config', 'Save SMS Config', {
-            subtitle: 'SMS gateway settings',
+            subtitle: 'Sends password-reset codes to the mobile on the account.',
             fieldIcon: <PhoneIcon size={12.992} />,
             actionIcon: <PhoneIcon size={13.993} />,
+            test: {
+              label: 'Send Test SMS',
+              placeholder: '98765 43210',
+              send: (to) => settingsApi.testSms(to, accessToken!),
+            },
           })}
         </div>
       ) : null}
@@ -171,11 +184,18 @@ type SectionCardProps = {
   rates?: boolean;
   /** Brand-colour layout: a swatch beside each input. */
   swatches?: boolean;
+  /** "Send test" row under the form (Email / SMS cards) — uses what's saved, so save first. */
+  test?: { label: string; placeholder: string; send: (to: string) => Promise<{ message: string }> };
   onSave: (values: SettingsValues) => Promise<void>;
 };
 
 const toDraft = (fields: readonly SectionField[], values: SettingsValues) =>
-  Object.fromEntries(fields.map((field) => [field.key, values[field.key] == null ? '' : String(values[field.key])]));
+  Object.fromEntries(
+    fields.map((field) => [
+      field.key,
+      values[field.key] == null ? (field.type === 'select' ? field.options?.[0]?.value ?? '' : '') : String(values[field.key]),
+    ]),
+  );
 
 function SectionCard({
   title,
@@ -188,18 +208,43 @@ function SectionCard({
   leading,
   rates,
   swatches,
+  test,
   onSave,
 }: SectionCardProps) {
   const [draft, setDraft] = useState<Record<string, string>>(() => toDraft(fields, values));
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [testTo, setTestTo] = useState('');
+  const [testing, setTesting] = useState(false);
+  // After a save the server sends secrets back masked: show that, not what was typed.
+  const savedKey = JSON.stringify(values);
+  useEffect(() => {
+    setDraft(toDraft(fields, JSON.parse(savedKey) as SettingsValues));
+  }, [fields, savedKey]);
+
+  const sendTest = async () => {
+    if (!test || !testTo.trim()) return;
+    setTesting(true);
+    setMessage(null);
+    try {
+      setMessage((await test.send(testTo.trim())).message);
+    } catch (err) {
+      setMessage(errorMessage(err));
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const save = async () => {
     const next: SettingsValues = {};
     for (const field of fields) {
       const raw = draft[field.key].trim();
       if (field.type === 'number') {
-        if (raw === '') continue;
+        // Blank clears it: the limit is off / the default applies.
+        if (raw === '') {
+          next[field.key] = null;
+          continue;
+        }
         const parsed = Number(raw);
         if (Number.isNaN(parsed)) {
           setMessage(`${field.label} must be a number.`);
@@ -232,15 +277,28 @@ function SectionCard({
       <div className={rates ? styles.rates : styles.fields}>
         {leading}
         {fields.map((field) => {
-          const input = (
+          const input = field.type === 'select' ? (
+            <SelectField
+              key={field.key}
+              label={field.label}
+              labelCase="sentence"
+              options={field.options ?? []}
+              placeholder={null}
+              value={draft[field.key]}
+              onChange={(event) => set(field.key)(event.target.value)}
+            />
+          ) : (
             <TextField
               key={field.key}
               className={rates ? styles.rateInput : undefined}
               fieldClassName={swatches ? styles.colorInput : undefined}
-              label={field.label}
-              aria-label={field.label}
+              label={withCurrency(field.label)}
+              aria-label={withCurrency(field.label)}
               icon={fieldIcon}
               inputMode={field.type === 'number' ? 'decimal' : undefined}
+              type={field.type === 'password' ? 'password' : 'text'}
+              autoComplete={field.type === 'password' ? 'new-password' : undefined}
+              placeholder={field.placeholder}
               value={draft[field.key]}
               onChange={(event) => set(field.key)(event.target.value)}
             />
@@ -278,6 +336,22 @@ function SectionCard({
           return input;
         })}
       </div>
+
+      {test ? (
+        <div className={styles.fields}>
+          <TextField
+            label={test.label}
+            placeholder={test.placeholder}
+            value={testTo}
+            onChange={(event) => setTestTo(event.target.value)}
+          />
+          <div className={styles.cardActions}>
+            <Button className={styles.secondary} size="sm" disabled={testing || !testTo.trim()} onClick={sendTest}>
+              {testing ? 'Sending…' : test.label}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {message ? <p className={styles.cardSubtitle}>{message}</p> : null}
 
@@ -348,7 +422,10 @@ function ApiKeysTab({ apiKeys, onChange }: { apiKeys: ApiKeyEntry[]; onChange: (
       <div className={styles.apiHead}>
         <div>
           <p className={styles.cardTitle}>API Keys &amp; Integrations</p>
-          <p className={styles.cardSubtitle}>Betting provider API connections</p>
+          <p className={styles.cardSubtitle}>
+            Odds feed key: an Active key named “Diamond” is used for the cricket feed (instead of the server’s
+            DIAMOND_API_KEY). Latency is measured on live requests.
+          </p>
         </div>
         <Button variant="primary" size="xs" icon={<PlusIcon size={12} />} onClick={() => openForm('new')}>
           Add API Key
@@ -357,7 +434,12 @@ function ApiKeysTab({ apiKeys, onChange }: { apiKeys: ApiKeyEntry[]; onChange: (
 
       {editing ? (
         <div className={styles.fields}>
-          <TextField label="Name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          <TextField
+            label="Name"
+            placeholder="Diamond"
+            value={form.name}
+            onChange={(event) => setForm({ ...form, name: event.target.value })}
+          />
           <TextField
             label={editing === 'new' ? 'Key' : 'New Key (leave blank to keep current)'}
             value={form.key}

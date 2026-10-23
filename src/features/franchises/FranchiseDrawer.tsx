@@ -20,13 +20,13 @@ import { Button } from '../../components/ui/Button/Button';
 import { Drawer } from '../../components/ui/Drawer/Drawer';
 import { MetricTile } from '../../components/ui/MetricTile/MetricTile';
 import { Tabs } from '../../components/ui/Tabs/Tabs';
-import { SelectField } from '../../components/ui/TextField/SelectField';
 import { TextField } from '../../components/ui/TextField/TextField';
 import { useAuth } from '../auth/authContext';
 import { ApiRequestError } from '../../lib/api';
 import { networkApi } from '../../lib/api/network';
-import type { NetworkDetail, SettlementCycle } from '../../lib/api/network';
-import { formatCount, formatMoney, formatRupees, formatRelativeTime } from '../../lib/format';
+import type { NetworkDetail } from '../../lib/api/network';
+import { commissionCap, commissionLabel, parseCommission } from '../users/commissionRates';
+import { formatCount, formatMoney, formatRupees, formatRelativeTime, withCurrency } from '../../lib/format';
 import { StaffFormModal } from '../superAgents/StaffFormModal';
 import { statusLabel } from '../users/usersData';
 import { useNetworkDetail } from '../users/useNetworkList';
@@ -34,8 +34,6 @@ import { FRANCHISE_STATUS_TONE, formatJoined, formatLocation, toNetworkPerson } 
 import { NetworkRow, NetworkSection, SummaryRow } from './NetworkRows';
 import { SuperAgentDrawer } from './SuperAgentDrawer';
 import styles from './FranchiseDrawer.module.css';
-
-const SETTLEMENT_CYCLES: SettlementCycle[] = ['Daily', 'Weekly', 'Monthly'];
 
 const errorMessage = (err: unknown) =>
   err instanceof ApiRequestError ? err.message : 'Unable to reach the server.';
@@ -283,12 +281,12 @@ function SettingsTab({ detail, onSaved }: { detail: NetworkDetail; onSaved: () =
   const { accessToken } = useAuth();
   const { account, abilities } = detail;
   const [form, setForm] = useState({
-    commissionRate: account.commissionRate === null ? '' : String(account.commissionRate),
-    creditLimit: numberOrEmpty(account.creditLimit),
+    matchCommission: numberOrEmpty(account.matchCommission ?? 0),
+    sessionCommission: numberOrEmpty(account.sessionCommission ?? 0),
     bettingLimit: numberOrEmpty(account.bettingLimit),
     maxExposure: numberOrEmpty(account.maxExposure),
-    settlementCycle: account.settlementCycle,
   });
+  const cap = commissionCap(account.parent);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -305,16 +303,13 @@ function SettingsTab({ detail, onSaved }: { detail: NetworkDetail; onSaved: () =
     setPending(true);
     setMessage(null);
     try {
-      const rate = form.commissionRate.trim() === '' ? null : Number(form.commissionRate);
-      if (rate !== null && (Number.isNaN(rate) || rate < 0 || rate > 100)) throw new Error('Commission must be 0–100%.');
       await networkApi.update(
         account._id,
         {
-          commissionRate: rate,
-          creditLimit: amount('Credit limit', form.creditLimit),
+          matchCommission: parseCommission('Match', form.matchCommission, cap),
+          sessionCommission: parseCommission('Session', form.sessionCommission, cap),
           bettingLimit: amount('Betting limit', form.bettingLimit),
           maxExposure: amount('Max exposure', form.maxExposure),
-          settlementCycle: form.settlementCycle,
         },
         accessToken,
       );
@@ -332,25 +327,25 @@ function SettingsTab({ detail, onSaved }: { detail: NetworkDetail; onSaved: () =
   return (
     <div className={styles.settings}>
       <TextField
-        label="Commission Percentage"
+        label={commissionLabel('Match', cap)}
         labelCase="caps"
         inputMode="decimal"
-        placeholder="Platform default"
-        readOnly={readOnly}
-        value={form.commissionRate}
-        onChange={(event) => set('commissionRate')(event.target.value)}
-      />
-      <TextField
-        label="Credit Limit (₹)"
-        labelCase="caps"
-        inputMode="numeric"
         placeholder="0"
         readOnly={readOnly}
-        value={form.creditLimit}
-        onChange={(event) => set('creditLimit')(event.target.value)}
+        value={form.matchCommission}
+        onChange={(event) => set('matchCommission')(event.target.value)}
       />
       <TextField
-        label="Betting Limit per User (₹)"
+        label={commissionLabel('Session', cap)}
+        labelCase="caps"
+        inputMode="decimal"
+        placeholder="0"
+        readOnly={readOnly}
+        value={form.sessionCommission}
+        onChange={(event) => set('sessionCommission')(event.target.value)}
+      />
+      <TextField
+        label={withCurrency('Betting Limit per User (₹)')}
         labelCase="caps"
         inputMode="numeric"
         placeholder="Platform default"
@@ -359,21 +354,13 @@ function SettingsTab({ detail, onSaved }: { detail: NetworkDetail; onSaved: () =
         onChange={(event) => set('bettingLimit')(event.target.value)}
       />
       <TextField
-        label="Max Exposure Limit (₹)"
+        label={withCurrency('Max Exposure Limit (₹)')}
         labelCase="caps"
         inputMode="numeric"
         placeholder="Platform default"
         readOnly={readOnly}
         value={form.maxExposure}
         onChange={(event) => set('maxExposure')(event.target.value)}
-      />
-      <SelectField
-        label="Settlement Cycle"
-        options={SETTLEMENT_CYCLES}
-        placeholder={null}
-        disabled={readOnly}
-        value={form.settlementCycle}
-        onChange={(event) => set('settlementCycle')(event.target.value)}
       />
       {message ? <p className={styles.placeholder}>{message}</p> : null}
       {readOnly ? null : (

@@ -52,7 +52,7 @@ export type RoleDefinition = {
   description: string;
   /** Route prefix owned by this role, e.g. /super-admin. */
   basePath: string;
-  /** Credentials pre-filled by the Quick Demo Login chips. */
+  /** Credentials pre-filled by the Quick Demo Login chips — dev server only. */
   demo: { username: string; password: string };
   /** Person shown in the sidebar identity chip. */
   operator: string;
@@ -100,6 +100,9 @@ const NAV = {
   permissions: { segment: 'permissions', label: 'Permissions', icon: ShieldCheckIcon },
 } satisfies Record<string, NavItem>;
 
+/** Production builds ship no credentials: the login form starts empty. */
+const NO_DEMO = { username: '', password: '' };
+
 /**
  * The four panels. Order here drives the Quick Demo Login grid, the router and
  * the sidebar — there is no second list to keep in sync.
@@ -112,7 +115,7 @@ export const ROLES: RoleDefinition[] = [
     icon: ShieldCheckIcon,
     description: 'Full platform control across every franchise, market and settlement.',
     basePath: '/super-admin',
-    demo: { username: 'mithu8178', password: 'superadmin@123' },
+    demo: import.meta.env.DEV ? { username: 'mithu8178', password: 'superadmin@123' } : NO_DEMO,
     operator: 'Ankit Sharma',
     manages: 'franchise',
     downline: NAV.franchises,
@@ -148,7 +151,7 @@ export const ROLES: RoleDefinition[] = [
     icon: BuildingIcon,
     description: 'Runs a region: onboards super agents and owns their exposure limits.',
     basePath: '/franchise',
-    demo: { username: 'franchise01', password: 'franchise@123' },
+    demo: import.meta.env.DEV ? { username: 'franchise01', password: 'franchise@123' } : NO_DEMO,
     operator: 'Rakesh Kadam',
     manages: 'super-agent',
     downline: NAV.superAgents,
@@ -176,7 +179,7 @@ export const ROLES: RoleDefinition[] = [
     icon: UsersCogIcon,
     description: 'Manages a book of agents and their daily credit allocation.',
     basePath: '/super-agent',
-    demo: { username: 'superagent01', password: 'superagent@123' },
+    demo: import.meta.env.DEV ? { username: 'superagent01', password: 'superagent@123' } : NO_DEMO,
     operator: 'Imran Sheikh',
     manages: 'agent',
     downline: NAV.agents,
@@ -203,7 +206,7 @@ export const ROLES: RoleDefinition[] = [
     icon: UserIcon,
     description: 'Front line: creates players, tops up chips and settles positions.',
     basePath: '/agent',
-    demo: { username: 'agent01', password: 'agent@123' },
+    demo: import.meta.env.DEV ? { username: 'agent01', password: 'agent@123' } : NO_DEMO,
     operator: 'Sahil Verma',
     manages: null,
     downline: NAV.users,

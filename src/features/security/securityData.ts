@@ -2,7 +2,7 @@ import { AlertTriangleIcon, LockIcon, LoginIcon, UsersIcon } from '../../compone
 import type { BadgeTone } from '../../components/ui/Badge/Badge';
 import type { StatCardProps } from '../../components/ui/StatCard/StatCard';
 import type { AuditLogEntry, SecurityStats } from '../../lib/api/security';
-import { formatCount } from '../../lib/format';
+import { formatCount, formatRupees } from '../../lib/format';
 import { ACTIVITY_TITLE } from '../users/usersData';
 
 export const SECURITY_TABS = ['Logs', 'Sessions', 'Audit', 'Policy'] as const;
@@ -74,7 +74,7 @@ export function describeAudit(entry: AuditLogEntry): string {
     entry.target && entry.target._id !== entry.actor?._id ? ` → ${entry.target.name || entry.target.username}` : '';
   const meta = entry.metadata ?? {};
   const extras = [
-    typeof meta.amount === 'number' ? `₹${meta.amount.toLocaleString('en-IN')}` : null,
+    typeof meta.amount === 'number' ? formatRupees(meta.amount) : null,
     typeof meta.roleKey === 'string' ? `${meta.roleKey} · ${meta.groupKey}.${meta.permissionKey} = ${meta.grant || 'off'}` : null,
     typeof meta.revoked === 'number' ? `${meta.revoked} sessions` : null,
     typeof meta.reason === 'string' ? `Reason: ${meta.reason}` : null,
@@ -87,7 +87,6 @@ export function auditCategory(action: string): string {
   if (/^(login|logout|register|password|session)/.test(action)) return 'Auth';
   if (/^account/.test(action)) return 'Accounts';
   if (/^permission/.test(action)) return 'Permissions';
-  if (/^kyc/.test(action)) return 'KYC';
   if (/^(deposit|withdrawal)/.test(action)) return 'Wallet';
   return 'Profile';
 }

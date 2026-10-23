@@ -17,13 +17,15 @@ export type SidebarProps = {
   /** The signed-in account's name (its username until a name is set). */
   displayName: string;
   open: boolean;
+  /** Hidden on desktop (the topbar's menu button brings it back). */
+  collapsed: boolean;
   onNavigate: () => void;
   onToggle: () => void;
   onSignOut: () => void;
 };
 
 /** Left rail — identical for all four panels; entries come from the role. */
-export function Sidebar({ role, displayName, open, onNavigate, onToggle, onSignOut }: SidebarProps) {
+export function Sidebar({ role, displayName, open, collapsed, onNavigate, onToggle, onSignOut }: SidebarProps) {
   const { name: brandName } = useBranding();
   const { can } = usePermissions();
   const [menuQuery, setMenuQuery] = useState('');
@@ -33,7 +35,7 @@ export function Sidebar({ role, displayName, open, onNavigate, onToggle, onSignO
   const items = term ? allowed.filter((item) => item.label.toLowerCase().includes(term)) : allowed;
 
   return (
-    <aside className={cx(styles.sidebar, open && styles.sidebarOpen)}>
+    <aside className={cx(styles.sidebar, open && styles.sidebarOpen, collapsed && styles.sidebarCollapsed)}>
       <div className={styles.brand}>
         <BrandMark size={33.993} />
         <div className={styles.brandText}>

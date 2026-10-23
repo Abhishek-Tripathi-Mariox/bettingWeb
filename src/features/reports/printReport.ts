@@ -1,5 +1,6 @@
 import type { ReportRow } from '../../lib/api/reports';
 import { formatReportCell, formatReportColumnHeader, getReportColumns } from './reportsData';
+import { platformTimeZone } from '../../lib/format';
 
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
@@ -27,7 +28,7 @@ export function printReport({ title, period, rows }: { title: string; period: st
     tr:nth-child(even) td { background: #fafafa; }
   </style></head><body>
     <h1>${escapeHtml(title)}</h1>
-    <p>${escapeHtml(period)} · ${rows.length} record${rows.length === 1 ? '' : 's'} · printed ${escapeHtml(new Date().toLocaleString('en-IN'))}</p>
+    <p>${escapeHtml(period)} · ${rows.length} record${rows.length === 1 ? '' : 's'} · printed ${escapeHtml(new Date().toLocaleString('en-IN', { timeZone: platformTimeZone() }))}</p>
     ${rows.length ? `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` : '<p>No records in this range.</p>'}
   </body></html>`);
   sheet.document.close();

@@ -1,15 +1,14 @@
 import { apiRequest } from '../api';
 
-export type ApiCommissionLevel = 'Franchise' | 'Super Agent' | 'Agent';
+export type ApiCommissionLevel = 'Franchise' | 'Super Agent' | 'Agent' | 'Player';
 export type ApiCommissionStatus = 'Pending' | 'Settled';
+/** Session: markets decided during the match. Match: Match Odds / Bookmaker. */
+export type ApiCommissionKind = 'Session' | 'Match';
+
+type Ref = { _id: string; name?: string; username: string };
 
 /** The entity ref on a commission row (`.populate('entity', 'name username role')`). */
-export type ApiCommissionEntityRef = {
-  _id: string;
-  name: string;
-  username: string;
-  role: string;
-};
+export type ApiCommissionEntityRef = Ref & { role: string };
 
 export type ApiCommission = {
   _id: string;
@@ -17,8 +16,14 @@ export type ApiCommission = {
   level: ApiCommissionLevel;
   /** "YYYY-MM". */
   period: string;
+  /** The match it was paid for. */
+  event: (Ref & { name: string; startTime: string }) | string | null;
+  /** The player whose bets earned it. */
+  player: Ref | string | null;
+  kind: ApiCommissionKind;
+  /** What the rate applies to: the session stake or the player's match net loss. */
   turnover: number;
-  /** Percent, e.g. 5 = 5%. */
+  /** Percent this account keeps, e.g. 0.5 = 0.5%. */
   rate: number;
   commission: number;
   status: ApiCommissionStatus;
@@ -30,6 +35,7 @@ export type ApiCommission = {
 export type ListCommissionParams = {
   level?: ApiCommissionLevel;
   status?: ApiCommissionStatus;
+  kind?: ApiCommissionKind;
 };
 
 function buildQuery(params: Record<string, string | undefined>): string {
@@ -44,11 +50,4 @@ function buildQuery(params: Record<string, string | undefined>): string {
 export const commissionApi = {
   list: (params: ListCommissionParams = {}, accessToken?: string | null) =>
     apiRequest<{ items: ApiCommission[] }>(`/commission${buildQuery(params)}`, { accessToken }),
-
-  /** Recomputes every entity's commission for the current period. */
-  recompute: (accessToken?: string | null) =>
-    apiRequest<{ items: ApiCommission[] }>('/commission/recompute', { method: 'POST', accessToken }),
-
-  settle: (id: string, accessToken?: string | null) =>
-    apiRequest<{ commission: ApiCommission }>(`/commission/${id}/settle`, { method: 'POST', accessToken }),
 };

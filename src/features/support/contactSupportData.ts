@@ -22,48 +22,66 @@ export const SUPPORT_INTRO = {
     'Our dedicated support team is available to help you. Reach us through any of the channels below.',
 };
 
-export const SUPPORT_CHANNELS: SupportChannel[] = [
-  {
-    emoji: '📞',
-    title: 'Call Support',
-    handle: '+91 98765 00000',
-    note: 'Mon–Sat, 9 AM – 9 PM IST',
-    rgb: '34, 197, 94',
-    action: 'Call Now',
-    href: 'tel:+919876500000',
-  },
-  {
-    emoji: '💬',
-    title: 'WhatsApp',
-    handle: '+91 98765 00001',
-    note: 'Chat instantly on WhatsApp',
-    rgb: '37, 211, 102',
-    action: 'Open WhatsApp',
-    href: 'https://wa.me/919876500001',
-  },
-  {
-    emoji: '✈️',
-    title: 'Telegram',
-    handle: '@betmaster_support',
-    note: 'Fast responses via Telegram',
-    rgb: '41, 182, 246',
-    action: 'Open Telegram',
-    href: 'https://t.me/betmaster_support',
-  },
-  {
-    emoji: '✉️',
-    title: 'Email Support',
-    handle: 'support@betmaster.com',
-    note: 'Response within 2–4 hours',
-    rgb: '250, 204, 21',
-    action: 'Send Email',
-    href: 'mailto:support@betmaster.com',
-  },
-];
+type SupportContacts = { email: string; phone: string; whatsapp: string; telegram: string; hours: string };
 
-export const SUPPORT_WINDOWS: SupportWindow[] = [
-  { day: 'Monday – Friday', hours: '9:00 AM – 10:00 PM', open: true },
-  { day: 'Saturday', hours: '9:00 AM – 9:00 PM', open: true },
-  { day: 'Sunday', hours: '10:00 AM – 6:00 PM', open: true },
-  { day: 'Public Holidays', hours: 'WhatsApp & Telegram only', open: false },
-];
+const digits = (value: string) => value.replace(/\D/g, '');
+/** 10-digit Indian numbers get the country code; anything longer is taken as already international. */
+const international = (value: string) => {
+  const d = digits(value);
+  return d.length === 10 ? `91${d}` : d;
+};
+
+/**
+ * The channels set in Platform Settings → General (support email / phone /
+ * WhatsApp / Telegram). A channel the admin left blank isn't shown.
+ */
+export function supportChannels(support: SupportContacts): SupportChannel[] {
+  const hours = support.hours || 'During support hours';
+  const channels: (SupportChannel | null)[] = [
+    support.phone
+      ? {
+          emoji: '📞',
+          title: 'Call Support',
+          handle: support.phone,
+          note: hours,
+          rgb: '34, 197, 94',
+          action: 'Call Now',
+          href: `tel:+${international(support.phone)}`,
+        }
+      : null,
+    support.whatsapp
+      ? {
+          emoji: '💬',
+          title: 'WhatsApp',
+          handle: support.whatsapp,
+          note: 'Chat on WhatsApp',
+          rgb: '37, 211, 102',
+          action: 'Open WhatsApp',
+          href: `https://wa.me/${international(support.whatsapp)}`,
+        }
+      : null,
+    support.telegram
+      ? {
+          emoji: '✈️',
+          title: 'Telegram',
+          handle: support.telegram.startsWith('@') ? support.telegram : `@${support.telegram.replace(/^https?:\/\/t\.me\//, '')}`,
+          note: 'Message us on Telegram',
+          rgb: '41, 182, 246',
+          action: 'Open Telegram',
+          href: `https://t.me/${support.telegram.replace(/^@/, '').replace(/^https?:\/\/t\.me\//, '')}`,
+        }
+      : null,
+    support.email
+      ? {
+          emoji: '✉️',
+          title: 'Email Support',
+          handle: support.email,
+          note: 'We reply by email',
+          rgb: '250, 204, 21',
+          action: 'Send Email',
+          href: `mailto:${support.email}`,
+        }
+      : null,
+  ];
+  return channels.filter((channel): channel is SupportChannel => channel !== null);
+}

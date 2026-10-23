@@ -210,7 +210,8 @@ export function LiveWallet({ adminTools }: { adminTools: boolean }) {
   useEffect(() => setTab(linkedTab), [linkedTab]);
   const [stats, setStats] = useState<WalletStats | null>(null);
   const [users, setUsers] = useState<ApiUser[]>([]);
-  const [pendingCommission, setPendingCommission] = useState<ApiCommission[]>([]);
+  /** Commission paid out this month (match-end payouts), for the level buckets. */
+  const [monthCommission, setMonthCommission] = useState<ApiCommission[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -222,7 +223,7 @@ export function LiveWallet({ adminTools }: { adminTools: boolean }) {
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Staff hold a wallet of their own (commission paid in, money moved down the network).
-  const { can } = usePermissions();
+  const { can, loaded: permissionsLoaded } = usePermissions();
   const visibleTabs = TAB_LABELS.filter((label) => {
     if (label === 'Payments') return adminTools;
     if (label === 'Deposits') return can('finance', 'deposit', 'V');
@@ -234,6 +235,8 @@ export function LiveWallet({ adminTools }: { adminTools: boolean }) {
   useEffect(() => {
     if (visibleTabs.length && !visibleTabs.includes(tab)) setTab(visibleTabs[0]);
   }, [visibleTabs, tab]);
+  // Don't fetch a tab this role can't open (the backend would 403) — wait for the fallback above.
+  const tabReady = permissionsLoaded && visibleTabs.includes(tab);
   const canTransfer = !adminTools && can('finance', 'fundTransfer', 'X');
   const [myBalance, setMyBalance] = useState<number | null>(null);
   const [transferring, setTransferring] = useState(false);
@@ -260,15 +263,15 @@ export function LiveWallet({ adminTools }: { adminTools: boolean }) {
     Promise.all([
       walletApi.stats(accessToken),
       adminTools ? accountsApi.list({ limit: 100 }, accessToken) : Promise.resolve({ items: [] as ApiUser[] }),
-      adminTools
-        ? commissionApi.list({ status: 'Pending' }, accessToken)
-        : Promise.resolve({ items: [] as ApiCommission[] }),
+      adminTools ? commissionApi.list({}, accessToken) : Promise.resolve({ items: [] as ApiCommission[] }),
     ])
       .then(([statsRes, usersRes, commissionRes]) => {
         if (cancelled) return;
         setStats(statsRes.stats);
         setUsers(usersRes.items);
-        setPendingCommission(commissionRes.items);
+        const now = new Date();
+        const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        setMonthCommission(commissionRes.items.filter((row) => row.period === period));
       })
       .catch((err) => {
         if (!cancelled) setError(errorMessage(err));
@@ -279,7 +282,7 @@ export function LiveWallet({ adminTools }: { adminTools: boolean }) {
   }, [accessToken, refreshKey, adminTools]);
 
   useEffect(() => {
-    if (!accessToken || tab === 'Payments') return;
+    if (!accessToken || tab === 'Payments' || !tabReady) return;
     let cancelled = false;
     setLoading(true);
 
@@ -338,7 +341,7 @@ export function LiveWallet({ adminTools }: { adminTools: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, tab, refreshKey]);
+  }, [accessToken, tab, tabReady, refreshKey]);
 
   /** Saves the decision made in the confirmation dialog; throws the message for the dialog to show. */
   const decide = async (request: ReviewRequest, reason: string) => {
@@ -559,7 +562,7 @@ export function LiveWallet({ adminTools }: { adminTools: boolean }) {
 
             <div className={styles.buckets}>
               {BUCKETS.map((bucket) => {
-                const due = pendingCommission.filter((row) => row.level === bucket.level);
+                const paid = monthCommission.filter((row) => row.level === bucket.level);
                 return (
                   <div
                     key={bucket.label}
@@ -576,10 +579,10 @@ export function LiveWallet({ adminTools }: { adminTools: boolean }) {
                         {bucket.emoji}
                       </span>
                       <span className={styles.bucketLabel}>{bucket.label}</span>
-                      <span className={styles.bucketActive}>{due.length} pending</span>
+                      <span className={styles.bucketActive}>{paid.length} payouts</span>
                     </div>
-                    <p className={styles.bucketDue}>{formatMoney(due.reduce((sum, row) => sum + row.commission, 0))}</p>
-                    <p className={styles.bucketCaption}>Commission due this cycle</p>
+                    <p className={styles.bucketDue}>{formatMoney(paid.reduce((sum, row) => sum + row.commission, 0))}</p>
+                    <p className={styles.bucketCaption}>Commission paid this month</p>
                   </div>
                 );
               })}
@@ -625,10 +628,9 @@ export function LiveWallet({ adminTools }: { adminTools: boolean }) {
         {tab === 'Payments' ? (
           <LivePaymentsTab
             users={userMap}
-            pendingCommission={pendingCommission}
+            monthCommission={monthCommission}
             refreshKey={refreshKey}
             onNewPayment={() => setPaying(true)}
-            onChanged={refresh}
           />
         ) : (
           <div className={styles.table}>
@@ -717,20 +719,19 @@ const PAYMENT_TONE: Record<ApiPayment['status'], BadgeTone> = {
 
 type LivePaymentsTabProps = {
   users: Map<string, ApiUser>;
-  pendingCommission: ApiCommission[];
+  /** Commission paid automatically at match end this month. */
+  monthCommission: ApiCommission[];
   refreshKey: number;
   onNewPayment: () => void;
-  onChanged: () => void;
 };
 
-/** Payments tab, live — history from `/wallet/payments`, disbursements are pending commission rows. */
-function LivePaymentsTab({ users, pendingCommission, refreshKey, onNewPayment, onChanged }: LivePaymentsTabProps) {
+/** Payments tab, live — history from `/wallet/payments`; commission itself is paid automatically at match end. */
+function LivePaymentsTab({ users, monthCommission, refreshKey, onNewPayment }: LivePaymentsTabProps) {
   const { accessToken } = useAuth();
   const [scope, setScope] = useState<Scope>('All');
   const [payments, setPayments] = useState<ApiPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [settling, setSettling] = useState<string | 'all' | null>(null);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -752,30 +753,13 @@ function LivePaymentsTab({ users, pendingCommission, refreshKey, onNewPayment, o
     };
   }, [accessToken, refreshKey]);
 
-  const settle = async (ids: string[], key: string | 'all') => {
-    if (!accessToken) return;
-    setSettling(key);
-    setError(null);
-    try {
-      for (const id of ids) {
-        // eslint-disable-next-line no-await-in-loop
-        await commissionApi.settle(id, accessToken);
-      }
-      onChanged();
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setSettling(null);
-    }
-  };
-
   const now = new Date();
   const thisMonth = payments.filter((payment) => {
     const date = new Date(payment.createdAt);
     return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
   });
   const monthName = now.toLocaleDateString('en-IN', { month: 'long' });
-  const commissionDue = pendingCommission.reduce((sum, row) => sum + row.commission, 0);
+  const commissionPaid = monthCommission.reduce((sum, row) => sum + row.commission, 0);
 
   const summary = [
     {
@@ -786,15 +770,8 @@ function LivePaymentsTab({ users, pendingCommission, refreshKey, onNewPayment, o
       rgb: '34, 197, 94',
     },
     {
-      label: 'Pending',
-      value: formatCount(pendingCommission.length),
-      color: 'var(--color-warning)',
-      icon: ClockIcon,
-      rgb: '250, 204, 21',
-    },
-    {
-      label: 'Commission Due',
-      value: formatMoney(commissionDue),
+      label: `Commission Paid (${monthName})`,
+      value: formatMoney(commissionPaid),
       color: 'var(--color-primary-light)',
       icon: PercentIcon,
       rgb: '41, 182, 246',
@@ -867,15 +844,6 @@ function LivePaymentsTab({ users, pendingCommission, refreshKey, onNewPayment, o
     },
   ];
 
-  const entityName = (row: ApiCommission) =>
-    typeof row.entity === 'string'
-      ? (users.get(row.entity)?.name ?? row.entity.slice(-6))
-      : row.entity.name || row.entity.username;
-  const entityMeta = (row: ApiCommission) =>
-    typeof row.entity === 'string' ? row.level : `${row.entity.username} · ${row.level}`;
-  const accent = (level: ApiCommissionLevel) =>
-    BUCKETS.find((bucket) => bucket.level === level)?.color ?? 'var(--color-primary)';
-
   return (
     <div className={paymentStyles.tab}>
       <div className={paymentStyles.summary}>
@@ -905,57 +873,6 @@ function LivePaymentsTab({ users, pendingCommission, refreshKey, onNewPayment, o
       </div>
 
       {error ? <p className={paymentStyles.muted}>{error}</p> : null}
-
-      <section className={paymentStyles.panel}>
-        <div className={paymentStyles.panelHead}>
-          <p className={paymentStyles.panelTitle}>
-            <PercentIcon size={14} />
-            Pending Commission Disbursements
-          </p>
-          <Button
-            className={paymentStyles.payAll}
-            size="xs"
-            icon={<TransactionsIcon size={12} />}
-            disabled={pendingCommission.length === 0 || settling !== null}
-            onClick={() =>
-              settle(
-                pendingCommission.map((row) => row._id),
-                'all',
-              )
-            }
-          >
-            {settling === 'all' ? 'Settling…' : `Pay All (${pendingCommission.length})`}
-          </Button>
-        </div>
-
-        <div className={paymentStyles.rows}>
-          {pendingCommission.length === 0 ? <p className={paymentStyles.rowMeta}>No pending commission.</p> : null}
-          {pendingCommission.map((row) => (
-            <div key={row._id} className={paymentStyles.row}>
-              <span className={paymentStyles.avatar} style={{ '--avatar-color': accent(row.level) } as CSSProperties}>
-                {entityName(row).slice(0, 1).toUpperCase()}
-              </span>
-              <div>
-                <p className={paymentStyles.rowName}>{entityName(row)}</p>
-                <p className={paymentStyles.rowMeta}>
-                  {entityMeta(row)} · {row.period}
-                </p>
-              </div>
-              <span className={paymentStyles.rowAmount}>{formatRupees(row.commission)}</span>
-              <Button
-                className={paymentStyles.payNow}
-                variant="quiet"
-                size="xs"
-                icon={<TransactionsIcon size={12} />}
-                disabled={settling !== null}
-                onClick={() => settle([row._id], row._id)}
-              >
-                {settling === row._id ? 'Settling…' : 'Pay Now'}
-              </Button>
-            </div>
-          ))}
-        </div>
-      </section>
 
       <div>
         <div className={paymentStyles.historyHead}>

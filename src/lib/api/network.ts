@@ -2,10 +2,6 @@ import { apiRequest } from '../api';
 import type { ApiUser } from '../api';
 
 export type NetworkRole = 'franchise' | 'super-agent' | 'agent' | 'player';
-export type CommissionType = 'Flat' | 'Slab based' | 'Turnover based';
-export type SettlementCycle = 'Daily' | 'Weekly' | 'Monthly';
-/** 'Not Submitted' until the player sends documents from the app; 'Pending' = awaiting review. */
-export type KycState = 'Not Submitted' | 'Pending' | 'Verified' | 'Rejected';
 
 export type AccountRef = {
   _id: string;
@@ -13,6 +9,9 @@ export type AccountRef = {
   username: string;
   businessName?: string;
   role: string;
+  /** Commission rates this account receives — the most it can pass down (parent refs only). */
+  matchCommission?: number;
+  sessionCommission?: number;
 };
 
 export type AccountSummary = {
@@ -38,7 +37,6 @@ export type AccountSummary = {
 
 export type NetworkAccount = Omit<ApiUser, 'role'> & {
   role: NetworkRole | 'super-admin';
-  kyc: KycState;
   walletBalance: number;
   lastLoginAt: string | null;
   createdAt: string;
@@ -46,19 +44,14 @@ export type NetworkAccount = Omit<ApiUser, 'role'> & {
   businessName: string;
   /** Players and agents only. */
   referralCode?: string;
+  /** Sum of the wallet balances of everyone below this account (computed by the backend). */
   creditLimit: number;
-  commissionRate: number | null;
-  /** The rate applied (own, else the platform default for the role) — on account detail only. */
-  commissionRateInForce?: number | null;
-  commissionType: CommissionType;
   bettingLimit: number;
   maxExposure: number;
-  settlementCycle: SettlementCycle;
   shareHolding: number | null;
-  matchCommission: number | null;
-  myMatchCommission: number | null;
-  sessionCommission: number | null;
-  mySessionCommission: number | null;
+  /** Percent this account receives from its upline for match / session commission. */
+  matchCommission: number;
+  sessionCommission: number;
   parent: AccountRef | null;
 };
 
@@ -70,7 +63,6 @@ export type NetworkListStats = {
   total: number;
   active: number;
   suspended: number;
-  kycPending: number;
   players: number;
   turnover: number;
   monthTurnover: number;
@@ -96,6 +88,9 @@ export type DetailBet = {
   _id: string;
   event: { _id: string; name: string; sport?: string } | string | null;
   market: { _id: string; name: string } | string | null;
+  /** Names saved with the bet (kept if the match is later removed). */
+  eventName?: string;
+  marketName?: string;
   user: Ref;
   selection: string;
   odds: number;
@@ -129,32 +124,6 @@ export type DetailActivity = {
   createdAt: string;
 };
 
-export type KycFile = { name: string; mime: string; data: string };
-
-/** The player's latest KYC submission — only returned to roles with the "KYC Details" permission. */
-export type KycSubmission = {
-  _id: string;
-  referenceId: string;
-  fullName: string;
-  /** 10-digit mobile; '' on submissions made before the field existed. */
-  phone: string;
-  dob: string;
-  address: string;
-  city: string;
-  state: string;
-  country: string;
-  postalCode: string;
-  documentType: string;
-  documentNumber: string;
-  front: KycFile;
-  back: KycFile | null;
-  status: 'Pending' | 'Verified' | 'Rejected';
-  rejectionReason: string;
-  reviewedBy: { _id: string; name?: string; username: string } | null;
-  reviewedAt: string | null;
-  createdAt: string;
-};
-
 export type DetailSession = { _id: string; ip: string; userAgent: string; createdAt: string; updatedAt: string };
 
 export type NetworkDetail = {
@@ -169,8 +138,6 @@ export type NetworkDetail = {
   activity: DetailActivity[];
   sessions: DetailSession[];
   abilities: Abilities;
-  /** null when never submitted or when the viewer lacks the KYC Details permission. */
-  kycSubmission: KycSubmission | null;
 };
 
 export type AccountDraft = Partial<{
@@ -180,21 +147,12 @@ export type AccountDraft = Partial<{
   city: string;
   state: string;
   dob: string;
-  kyc: KycState;
-  /** Sent with kyc: 'Rejected' — shown to the player in the app. */
-  kycRejectionReason: string;
   businessName: string;
-  creditLimit: number;
-  commissionRate: number | null;
-  commissionType: CommissionType;
   bettingLimit: number;
   maxExposure: number;
-  settlementCycle: SettlementCycle;
   shareHolding: number | null;
-  matchCommission: number | null;
-  myMatchCommission: number | null;
-  sessionCommission: number | null;
-  mySessionCommission: number | null;
+  matchCommission: number;
+  sessionCommission: number;
 }>;
 
 export type CreateAccountPayload = AccountDraft & {
@@ -229,8 +187,8 @@ export type MyDashboard = {
   superAgents: (DashboardAgent & { agents: number })[];
   /** Code the agent shares so new app sign-ups land on its panel. */
   referralCode: string | null;
-  /** Percent used for the commission estimates (own rate, else the platform default for the role). */
-  commissionRate: number;
+  /** Percent this account receives from its upline. */
+  commissionRates: { match: number; session: number };
   stats: {
     totalUsers: number;
     activeToday: number;
@@ -243,14 +201,12 @@ export type MyDashboard = {
     yesterdayCommission: number;
     todayRevenue: number;
     yesterdayRevenue: number;
-    pendingDeposits: { count: number; amount: number };
-    pendingWithdrawals: { count: number; amount: number };
+    pendingDeposits: { count: number; amount: number } | null;
+    pendingWithdrawals: { count: number; amount: number } | null;
   };
   overview: {
     totalUsers: number;
     activeToday: number;
-    kycVerified: number;
-    kycPending: number;
     suspended: number;
     newThisMonth: number;
     newLastMonth: number;
@@ -273,7 +229,8 @@ export type MyProfile = {
   preferences: Record<string, boolean>;
   /** The limits that apply to this account's book — own value, else the platform default. */
   limits: {
-    commissionRate: { value: number | null; isDefault: boolean };
+    matchCommission: number;
+    sessionCommission: number;
     bettingLimit: { value: number | null; isDefault: boolean };
     minBet: number | null;
     maxExposure: number | null;
@@ -308,7 +265,7 @@ export const networkApi = {
     }),
 
   list: (
-    params: { role: NetworkRole; status?: 'active' | 'suspended'; kyc?: KycState; q?: string; page?: number; limit?: number },
+    params: { role: NetworkRole; status?: 'active' | 'suspended'; q?: string; page?: number; limit?: number },
     accessToken: string,
   ) => {
     const search = new URLSearchParams();

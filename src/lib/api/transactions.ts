@@ -1,6 +1,6 @@
 import { apiRequest } from '../api';
 
-export type TransactionType = 'Deposit' | 'Withdrawal' | 'Bet Win' | 'Bet Loss' | 'Adjustment' | 'Commission' | 'Payment';
+export type TransactionType = 'Deposit' | 'Withdrawal' | 'Bet Win' | 'Bet Loss' | 'Adjustment' | 'Commission' | 'Payment' | 'Referral Bonus';
 export type TransactionStatus = 'Pending' | 'Completed' | 'Failed';
 export type TransactionTab = 'deposits' | 'withdrawals' | 'bets' | 'commission' | 'payments' | 'adjustments';
 
